@@ -1,3 +1,5 @@
 """Models."""
 
-from .ganomaly import GANomaly
+from .ganomaly import GANomalyAssembler
+
+__ALL__ = ["GANomalyAssembler"]

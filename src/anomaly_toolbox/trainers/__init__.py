@@ -1,3 +1,3 @@
 """Collection of Trainers."""
 
-from .ganomaly import GANomalyTrainer
+from .ganomaly import GANomaly

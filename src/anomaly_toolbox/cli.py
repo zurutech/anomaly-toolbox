@@ -3,7 +3,7 @@
 """Console script for anomaly_toolbox."""
 import sys
 import click
-from anomaly_toolbox.trainers import GANomalyTrainer
+from anomaly_toolbox.trainers import GANomaly
 
 
 @click.command()
@@ -13,7 +13,7 @@ def main(args=None):
         "Replace this message by putting your code into " "anomaly_toolbox.cli.main"
     )
     click.echo("See click documentation at http://click.pocoo.org/")
-    GANomalyTrainer().run()
+    GANomaly().train()
     return 0
 
 
