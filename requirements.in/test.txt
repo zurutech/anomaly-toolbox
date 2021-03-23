@@ -1,0 +1,9 @@
+# pyup: ignore file
+# Testing
+
+codecov
+coverage
+pytest
+pytest-cov
+tox
+-e git+https://github.com/thisch/pytest-sphinx.git#egg=pytest-sphinx

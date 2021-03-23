@@ -1,0 +1,15 @@
+[flake8]
+# E203: whitespace before ‘:’
+# E266: too many leading ‘#’ for block comment
+# E501: line too long (82 > 79 characters)
+# W503: line break before binary operator
+ignore = E203, E266, E501, W503
+max-line-length = 80
+max-complexity = 18
+# C: All C class violations are reported when the user specifies flake8 --max-complexity
+# E: All E class violations are "errors" reported by pycodestyle
+# F: All F class violations are reported by pyflakes
+# W: All W class violations are "warnings" reported by pycodestyle
+# B: All B class violations are "bugbear" checks
+# B9: All B9 class violations are "bugbear" opinionated checks
+select = B,C,E,F,W,T4,B9

@@ -1,0 +1,50 @@
+dist: xenial
+language: python
+addons:
+  artifacts: true
+python:
+  - 3.7
+stages:
+  - Black
+  - Pylint
+  - Deploy
+before_install:
+  - sudo apt-get install -y --no-install-recommends bc
+addons:
+  apt:
+    update: true
+install: &requirements
+- pip install -r requirements.txt
+- pip install tox-travis
+- pip install -e .
+script: tox
+after_success: codecov
+jobs:
+  include:
+  - stage: Black
+    install: *requirements
+    script:
+    - echo excluding $(git config --file .gitmodules --get-regexp path | awk '{ print
+      $2 }')
+    - black --exclude $(git config --file .gitmodules --get-regexp path | awk '{ print
+      $2 }') --check .
+  - stage: Pylint
+    install: *requirements
+    script:
+    - pip --no-cache-dir install pylint-runner
+    - pylint_runner --rcfile=.pylintrc --output-format=text . | tee pylint.txt
+    - score=$(sed -n 's/^Your code has been rated at \([-0-9.]*\)\/.*/\1/p' pylint.txt)
+    - if (( $(echo "$score < 8" |bc -l) )); then echo "Your Pylint score is too low, $score < 8!"; exit 1; fi
+  - stage: Deploy
+    script: skip
+    deploy:
+      provider: pypi
+      user: __token__
+      password:
+        # Generate an API token from PyPi and ecrypt it using travis-encrypt and copy in in the secure field
+        secure:
+      on:
+        tags: true
+        all_branches: true
+    # Deploy only if tag respects semantic versioning pre-pended with v (e.g. v0.1.0)
+    if: tag =~ /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$/

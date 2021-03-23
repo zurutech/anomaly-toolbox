@@ -1,0 +1,4 @@
+# pyup: ignore file
+# Core
+Click>=7.0
+tensorflow-datasets

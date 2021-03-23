@@ -1,0 +1,15 @@
+# pyup: ignore file
+# Core
+-r base.txt
+
+# Dev
+rope
+
+# Docs
+-r docs.txt
+
+# Linting
+-r linting.txt
+
+# Testing
+-r test.txt
