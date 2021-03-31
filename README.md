@@ -30,6 +30,14 @@ Run complete test suite + linting:
 tox
 ```
 
+## TODOS
+
+- [x] Implement Models
+- [x] Implement Losses
+- [ ] Implement Datasets (basics)
+- [ ] Implement Training
+- [ ] Implement Datasets (all)
+
 ## Credits
 
 This package was created with [Cookiecutter] and the [zurutech/cookiecutter-pypackage] project template.

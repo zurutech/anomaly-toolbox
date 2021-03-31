@@ -1,29 +1,26 @@
-"""
-GANomaly Architecture implementation.
+"""BiGAN Architecture Implementation."""
 
-Due to some of the characteristics of the Architecture, this module is structured as such:
-
-GANomalyAssembler -> Primitive Encoder and Decoder
-GANomalyGenerator -> Built on top of the Decoder Primitive
-GANomalyDiscriminator -> Built on top of the Encoder Primitive
-"""
-
-from typing import Any, Tuple
+from typing import Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
 
-__ALL__ = ["GANomalyAssembler", "GANomalyGenerator", "GANomalyDiscriminator"]
+__ALL__ = ["BiGANAssembler"]
 
-# TODO: Add support for extra layers
-class GANomalyAssembler:
-    """Assembler providind GANomaly primitive Encoder and Decoder architectures."""
+
+KERNEL_INITIALIZER = keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
+ALMOST_ONE = keras.initializers.RandomNormal(mean=1.0, stddev=0.02)
+
+
+class BiGANAssembler:
+    """Assembler providind BiGAN primitive Encoder and Decoder architectures."""
 
     @staticmethod
     def assemble_encoder(
         input_dimension: Tuple[int, int, int],
         filters: int,
         latent_space_dimension: int = 100,
+        l2_penalty: float = 0.0,
     ) -> tf.keras.Model:
         """
         Assemble the GANomaly Encoder as a :obj:`tf.keras.Model` using Keras Functional API.
@@ -34,7 +31,8 @@ class GANomalyAssembler:
         Args:
             input_dimension: Tuple[int, int, int] representing the shape of the input data.
             filters: Filters of the first convolution.
-            latent_space_dimension: Dimension of the resulting encoded represention.
+            latent_space_dimension: Dimension (along the depth) of the resulting encoded represention.
+            l2_penalty: l2 regularization strenght
 
         Return:
             The assembled model.
@@ -49,6 +47,8 @@ class GANomalyAssembler:
             strides=2,
             padding="same",
             use_bias=False,
+            kernel_regularizer=keras.regularizers.l2(l2_penalty),
+            kernel_initializer=KERNEL_INITIALIZER,
         )(input_layer)
         x = keras.layers.LeakyReLU(alpha=0.2)(x)
 
@@ -64,8 +64,15 @@ class GANomalyAssembler:
                 strides=2,
                 padding="same",
                 use_bias=False,
+                kernel_regularizer=keras.regularizers.l2(l2_penalty),
+                kernel_initializer=KERNEL_INITIALIZER,
             )(x)
-            x = keras.layers.BatchNormalization()(x)
+            x = keras.layers.BatchNormalization(
+                beta_initializer=ALMOST_ONE,
+                gamma_initializer=ALMOST_ONE,
+                momentum=0.1,
+                epsilon=1e-5,
+            )(x)
             x = keras.layers.LeakyReLU(alpha=0.2)(x)
 
         # -----------
@@ -76,9 +83,10 @@ class GANomalyAssembler:
             strides=1,
             padding="valid",
             use_bias=False,
+            kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
-        encoder = tf.keras.Model(input_layer, x, name="ganomaly_encoder")
+        encoder = tf.keras.Model(input_layer, x, name="bigan_encoder")
         return encoder
 
     @staticmethod
@@ -86,6 +94,7 @@ class GANomalyAssembler:
         input_dimension: int,
         output_dimension: Tuple[int, int, int],
         filters: int,
+        l2_penalty: float = 0.0,
     ) -> tf.keras.Model:
         """
         Assemble GANomaly Decoder as a :obj:`tf.keras.Model` using the Functional API.
@@ -108,6 +117,8 @@ class GANomalyAssembler:
             strides=1,
             padding="valid",
             use_bias=False,
+            kernel_regularizer=keras.regularizers.l2(l2_penalty),
+            kernel_initializer=KERNEL_INITIALIZER,
         )(input_layer)
         x = keras.layers.ReLU()(x)
 
@@ -123,8 +134,15 @@ class GANomalyAssembler:
                 strides=2,
                 padding="same",
                 use_bias=False,
+                kernel_regularizer=keras.regularizers.l2(l2_penalty),
+                kernel_initializer=KERNEL_INITIALIZER,
             )(x)
-            x = keras.layers.BatchNormalization()(x)
+            x = keras.layers.BatchNormalization(
+                beta_initializer=ALMOST_ONE,
+                gamma_initializer=ALMOST_ONE,
+                momentum=0.1,
+                epsilon=1e-5,
+            )(x)
             x = keras.layers.ReLU()(x)
 
         # -----------
@@ -136,61 +154,63 @@ class GANomalyAssembler:
             padding="same",
             use_bias=False,
             activation="tanh",
+            kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
-        decoder = tf.keras.Model(input_layer, x, name="ganomaly_decoder")
+        decoder = tf.keras.Model(input_layer, x, name="bigan_decoder")
         return decoder
 
-
-class GANomalyDiscriminator(keras.Model):
-    """Implementation of the GANomaly Discriminator using :class:`GANomalyAssembler`."""
-
-    def __init__(
-        self,
+    @staticmethod
+    def assemble_discriminator(
         input_dimension: Tuple[int, int, int],
         filters: int,
-        latent_space_dimension: int = 1,
-    ) -> None:
-        """Initialize the the model."""
-        super().__init__()
-        layers = GANomalyAssembler.assemble_encoder(
-            input_dimension, filters, latent_space_dimension
-        ).layers
-
-        self.features_extractor = keras.Sequential(
-            layers[:-1], name="ganomaly_discriminator_features_extractor"
+        latent_space_dimension: int = 100,
+        l2_penalty: float = 0.0,
+    ) -> keras.Model:
+        encoder = BiGANAssembler.assemble_encoder(
+            input_dimension, filters, latent_space_dimension, l2_penalty
         )
-        self.classifier = keras.Sequential(
-            [layers[-1], keras.layers.Flatten()],
-            name="ganomaly_discriminator_classifier",
+        input_layer = keras.layers.Input(shape=input_dimension)
+
+        input_encoding = keras.layers.Input(shape=latent_space_dimension)
+        d_z = keras.layers.Conv2D(
+            128,
+            (1, 1),
+            kernel_initializer=KERNEL_INITIALIZER,
+            strides=(1, 1),
+            padding="valid",
+            use_bias=False,
+        )(input_encoding)
+        d_z = keras.layers.LeakyReLU(0.2)(d_z)  # D(z) <-> 1x1x128
+
+        concat_input = keras.layers.concatenate(
+            [encoder(input_layer), d_z]
+        )  # D(x|z) <-> 1x1x256
+
+        fc = keras.layers.Conv2D(
+            1024,
+            (1, 1),
+            kernel_initializer=KERNEL_INITIALIZER,
+            strides=(1, 1),
+            padding="valid",
+            use_bias=False,
+        )(concat_input)
+        feature = keras.layers.LeakyReLU(0.2, name="feature")(fc)  # 1x1x1024
+
+        out = keras.layers.Conv2D(
+            1,
+            (1, 1),
+            kernel_initializer=KERNEL_INITIALIZER,
+            strides=(1, 1),
+            padding="valid",
+            use_bias=False,
+        )(
+            feature
+        )  # 1x1x1
+
+        discriminator = keras.Model(
+            inputs=[input_layer, input_encoding],
+            outputs=[out, feature],
+            name="bigan_discriminator",
         )
-
-    def call(self, inputs) -> Tuple[Any, Any]:
-        """Perform the forward pass."""
-        features = self.features_extractor(inputs)
-        classification = self.classifier(features)
-        return classification, features
-
-
-class GANomalyGenerator(keras.Model):
-    """Implementation of the GANomaly Generator using :class:`GANomalyAssembler`."""
-
-    def __init__(self, input_dimension, filters, latent_space_dimension):
-        """Initialize the the model."""
-        super().__init__()
-        self.encoder_1 = GANomalyAssembler.assemble_encoder(
-            input_dimension, filters, latent_space_dimension
-        )
-        self.encoder_2 = GANomalyAssembler.assemble_encoder(
-            input_dimension, filters, latent_space_dimension
-        )
-        self.decoder = GANomalyAssembler.assemble_decoder(
-            latent_space_dimension, input_dimension, filters
-        )
-
-    def call(self, inputs) -> Tuple[Any, Any, Any]:
-        """Perform the forward pass."""
-        latent_i = self.encoder_1(inputs)
-        generated_data = self.decoder(latent_i)
-        latent_o = self.encoder_2(generated_data)
-        return generated_data, latent_i, latent_o
+        return discriminator
