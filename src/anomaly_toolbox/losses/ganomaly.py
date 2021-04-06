@@ -14,54 +14,34 @@ def discriminator_loss(d_real, d_gen):
     Returns:
         Loss on real data + Loss on generated data.
     """
-
-    print("d_real.shape: ", d_real, " || d_gen.shape: ", d_gen)
-    real_loss = tf.nn.sigmoid_cross_entropy(
-        multi_class_labels=tf.ones_like(d_real), logits=d_real
+    real_loss = keras.losses.binary_crossentropy(
+        tf.ones_like(d_real), d_real, from_logits=True
     )
-    generated_loss = tf.nn.sigmoid_cross_entropy(
-        multi_class_labels=tf.zeros_like(d_gen), logits=d_gen
+    generated_loss = keras.losses.binary_crossentropy(
+        tf.zeros_like(d_gen), d_gen, from_logits=True
     )
     return real_loss + generated_loss
 
 
-def adversarial_loss_bce(discriminator: keras.Model, generated_data):
-    d_generated_data, _ = discriminator(generated_data)
-    return tf.nn.sigmoid_cross_entropy(
-        multi_class_labels=tf.ones_like(d_generated_data),
-        logits=d_generated_data,
+def adversarial_loss_bce(d_gen):
+    return keras.losses.binary_crossentropy(
+        tf.ones_like(d_gen), d_gen, from_logits=True
     )
 
 
-def adversarial_loss_fm(
-    # discriminator: k.Model,
-    discriminator: Callable,
-    query_data,
-    generated_data,
-):
+def adversarial_loss_fm(feature_a, feature_b):
     """
     Compute the adversarial feature matching loss.
 
     Args:
-        discriminator: The discriminator
-        query_data: the input x data
-        generated_data: the data generated with generator
+        feature_a: input image feature
+        feature_b: generated image feature
 
     Returns:
         the value of the adversarial loss
 
     """
-    _, d_query_feature = discriminator(query_data)
-    _, d_generated_feature = discriminator(generated_data)
-    # d_query = discriminator.intermediate(query_data)
-    # d_generated = discriminator.intermediate(generated_data)
-    print(
-        "discriminator.intermediate(query_data): ",
-        d_query_feature.shape,
-        " | discriminator.intermediate(generated_data): ",
-        d_generated_feature.shape,
-    )
-    return tf.losses.mean_squared_error(d_query_feature, d_generated_feature)
+    return keras.losses.mean_squared_error(feature_a, feature_b)
 
 
 def contextual_loss(query_data: tf.Tensor, generated_data: tf.Tensor):
@@ -76,7 +56,7 @@ def contextual_loss(query_data: tf.Tensor, generated_data: tf.Tensor):
         The L1 loss
 
     """
-    return keras.losses.MeanAbsoluteError()(query_data, generated_data)
+    return keras.losses.mean_absolute_error(query_data, generated_data)
 
 
 def encoder_loss(query_encoded: tf.Tensor, generated_encoded: tf.Tensor):
@@ -92,22 +72,6 @@ def encoder_loss(query_encoded: tf.Tensor, generated_encoded: tf.Tensor):
 
     """
     return tf.losses.mean_squared_error(query_encoded, generated_encoded)
-
-
-# TODO: Test exchanging it with keras.binary_cross_entropy while using a sigmoid activation on the last layer
-def bce(x, label):
-    """
-    Return the discrete binary cross entropy between x and the discrete label.
-
-    Args:
-        x: a 2D tensor
-        label: the discrite label, aka, the distribution to match
-
-    Returns:
-        The binary cros entropy
-    """
-    assert len(x.shape) == 2 and len(label.shape) == 0
-    return tf.nn.sigmoid_cross_entropy(tf.ones_like(x) * label, x)
 
 
 def smooth(label):
@@ -131,37 +95,21 @@ def smooth(label):
     )
 
 
-def min_max(positive, negative, label_smooth: bool = False):
-    """
-    Return the discriminator (min max) loss).
+# def min_max(positive, negative, label_smooth: bool = False):
+#     """
+#     Return the discriminator (min max) loss).
 
-    Args:
-        positive: the discriminator output for the positive class: 2D tensor
-        negative: the discriminator output for the negative class: 2D tensor
-        smooth: when true, appiles one-sided label smoothing
-    Returns:
-        The sum of 2 BCE
-    """
-    if label_smooth:
-        one = smooth(1.0)
-    else:
-        one = tf.constant(1.0)
-    zero = tf.constant(0.0)
-    d_loss = bce(positive, one) + bce(negative, zero)
-    return d_loss
-
-
-def feature_matching_loss(feature_a, feature_b) -> tf.Tensor:
-    """Returns the feature matching loss between a and b
-    Args:
-        feature_a: first tensor: 2D tensor (bs, feature)
-        feature_b: second tensor: 2D tensor (bs, feature)
-    Returns:
-        The feature matching between feature_a and feature_b
-        mean|mean(feature_a) - mean(feature_b)|²
-    """
-    assert len(feature_a.shape) == 2 and len(feature_b.shape) == 2
-    mean_a = tf.reduce_mean(feature_a, axis=0)
-    mean_b = tf.reduce_mean(feature_b, axis=0)
-    fm = tf.reduce_mean(tf.math.squared_difference(mean_a, mean_b))
-    return fm
+#     Args:
+#         positive: the discriminator output for the positive class: 2D tensor
+#         negative: the discriminator output for the negative class: 2D tensor
+#         smooth: when true, appiles one-sided label smoothing
+#     Returns:
+#         The sum of 2 BCE
+#     """
+#     if label_smooth:
+#         one = smooth(1.0)
+#     else:
+#         one = tf.constant(1.0)
+#     zero = tf.constant(0.0)
+#     d_loss = bce(positive, one) + bce(negative, zero)
+#     return d_loss

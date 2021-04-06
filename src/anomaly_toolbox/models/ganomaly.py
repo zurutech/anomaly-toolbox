@@ -15,6 +15,8 @@ import tensorflow.keras as keras
 
 __ALL__ = ["GANomalyAssembler", "GANomalyGenerator", "GANomalyDiscriminator"]
 
+KERNEL_INITIALIZER = keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
+
 # TODO: Add support for extra layers
 class GANomalyAssembler:
     """Assembler providind GANomaly primitive Encoder and Decoder architectures."""
@@ -49,6 +51,7 @@ class GANomalyAssembler:
             strides=2,
             padding="same",
             use_bias=False,
+            kernel_initializer=KERNEL_INITIALIZER,
         )(input_layer)
         x = keras.layers.LeakyReLU(alpha=0.2)(x)
 
@@ -64,6 +67,7 @@ class GANomalyAssembler:
                 strides=2,
                 padding="same",
                 use_bias=False,
+                kernel_initializer=KERNEL_INITIALIZER,
             )(x)
             x = keras.layers.BatchNormalization()(x)
             x = keras.layers.LeakyReLU(alpha=0.2)(x)
@@ -76,6 +80,7 @@ class GANomalyAssembler:
             strides=1,
             padding="valid",
             use_bias=False,
+            kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
         encoder = tf.keras.Model(input_layer, x, name="ganomaly_encoder")
@@ -108,6 +113,7 @@ class GANomalyAssembler:
             strides=1,
             padding="valid",
             use_bias=False,
+            kernel_initializer=KERNEL_INITIALIZER,
         )(input_layer)
         x = keras.layers.ReLU()(x)
 
@@ -123,6 +129,7 @@ class GANomalyAssembler:
                 strides=2,
                 padding="same",
                 use_bias=False,
+                kernel_initializer=KERNEL_INITIALIZER,
             )(x)
             x = keras.layers.BatchNormalization()(x)
             x = keras.layers.ReLU()(x)
@@ -136,12 +143,14 @@ class GANomalyAssembler:
             padding="same",
             use_bias=False,
             activation="tanh",
+            kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
         decoder = tf.keras.Model(input_layer, x, name="ganomaly_decoder")
         return decoder
 
 
+# TODO: See if rewriting with the Functional API simplifies the code
 class GANomalyDiscriminator(keras.Model):
     """Implementation of the GANomaly Discriminator using :class:`GANomalyAssembler`."""
 
@@ -165,32 +174,29 @@ class GANomalyDiscriminator(keras.Model):
             name="ganomaly_discriminator_classifier",
         )
 
-    def call(self, inputs) -> Tuple[Any, Any]:
+    def call(self, inputs, training: bool = True) -> Tuple[Any, Any]:
         """Perform the forward pass."""
-        features = self.features_extractor(inputs)
-        classification = self.classifier(features)
+        features = self.features_extractor(inputs, training=training)
+        classification = self.classifier(features, training=training)
         return classification, features
 
 
+# TODO: See if rewriting with the Functional API simplifies the code
 class GANomalyGenerator(keras.Model):
     """Implementation of the GANomaly Generator using :class:`GANomalyAssembler`."""
 
     def __init__(self, input_dimension, filters, latent_space_dimension):
         """Initialize the the model."""
         super().__init__()
-        self.encoder_1 = GANomalyAssembler.assemble_encoder(
-            input_dimension, filters, latent_space_dimension
-        )
-        self.encoder_2 = GANomalyAssembler.assemble_encoder(
+        self.encoder = GANomalyAssembler.assemble_encoder(
             input_dimension, filters, latent_space_dimension
         )
         self.decoder = GANomalyAssembler.assemble_decoder(
             latent_space_dimension, input_dimension, filters
         )
 
-    def call(self, inputs) -> Tuple[Any, Any, Any]:
+    def call(self, inputs, training: bool = True) -> Tuple[Any, Any]:
         """Perform the forward pass."""
-        latent_i = self.encoder_1(inputs)
-        generated_data = self.decoder(latent_i)
-        latent_o = self.encoder_2(generated_data)
-        return generated_data, latent_i, latent_o
+        latent_i = self.encoder(inputs, training=training)
+        generated_data = self.decoder(latent_i, training=training)
+        return latent_i, generated_data
