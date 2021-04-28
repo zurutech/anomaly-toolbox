@@ -6,9 +6,6 @@ from tensorflow._api.v2 import data
 import tensorflow_datasets as tfds
 from tensorflow.python.ops.image_ops_impl import ResizeMethod, resize_nearest_neighbor
 
-# TODO: add support for corrupted MNIST
-# TODO: add support for Chest X-Ray
-
 
 class MNISTDataset:
     def __init__(self):
@@ -37,7 +34,7 @@ class MNISTDataset:
         pipeline_train = partial(pipeline, is_training=True)
         pipeline_test = partial(pipeline, is_training=False)
         is_anomalous = lambda _, label: label == anomalous_label
-        is_normal = lambda _, label: label == anomalous_label
+        is_normal = lambda _, label: label != anomalous_label
         # --- Train Data ---
         ds_train_anomalous = self.ds_train.filter(is_anomalous).apply(pipeline_train)
         ds_train_normal = self.ds_train.filter(is_normal).apply(pipeline_train)

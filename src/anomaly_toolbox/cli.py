@@ -2,6 +2,7 @@
 
 """Console script for anomaly_toolbox."""
 import sys
+from datetime import datetime
 
 import click
 
@@ -19,14 +20,21 @@ def main(args=None):
     hps = {
         "anomalous_label": 9,
         "learning_rate": 2e-3,
-        "batch_size": 64,
-        "epoch": 10,
-        "shuffle_buffer_size": 10000,
+        "batch_size": 32,
+        "epoch": 15,
         "adversarial_loss_weight": 1,
-        "contextual_loss_weight": 1,
+        "contextual_loss_weight": 50,
         "enc_loss_weight": 1,
+        "shuffle_buffer_size": 10000,
     }
-    GANomaly(learning_rate=hps["learning_rate"]).train_mnist(
+    id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    train_log_dir = "logs/train_data/" + id
+    test_log_dir = "logs/test_data/" + id
+    GANomaly(
+        learning_rate=hps["learning_rate"],
+        train_log_dir=train_log_dir,
+        test_log_dir=test_log_dir,
+    ).train_mnist(
         batch_size=hps["batch_size"],
         epoch=hps["epoch"],
         anomalous_label=hps["anomalous_label"],

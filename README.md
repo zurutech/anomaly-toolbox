@@ -20,7 +20,26 @@ Anomaly Toolbox Powered by GANs
 pip install anomaly-toolbox
 ```
 
+## Usage
+
+```
+anomaly_toolbox
+```
+
 ## Features
+
+## References
+
+- **GANomaly**:
+    - Paper: https://arxiv.org/abs/1805.06725
+    - Code: https://github.com/samet-akcay/ganomaly
+- **EGBAD (BiGAN)**:
+    - Paper: https://arxiv.org/abs/1802.06222
+    - Code: https://github.com/houssamzenati/Efficient-GAN-Anomaly-Detection
+- **AnoGAN**:
+    - Paper: https://arxiv.org/abs/1703.05921
+    - Code (not official): https://github.com/LeeDoYup/AnoGAN
+    - Code (not official): https://github.com/tkwoo/anogan-keras
 
 ## Testing
 
@@ -34,9 +53,25 @@ tox
 
 - [x] Implement Models
 - [x] Implement Losses
-- [ ] Implement Datasets (basics)
+- [x] Implement Datasets (basics)
 - [ ] Implement Training
+    - [ ] Configure Experiments and HPs on TB
+    - [ ] Add AUC metric (or something like that)
+    - [ ] GANomaly
+    - [ ] BiGAN
+    - [ ] AnoGAN
+- [ ] Add a proper CLI
+- [ ] Use Logging
 - [ ] Implement Datasets (all)
+- [ ] Implement More Datasets
+  - [ ] MNIST corrupted
+  - [ ] Chest X-RAY
+- [ ] Implement more models
+  - [ ] FastAnoGAN
+  - [ ] DeScarGAN
+  - [ ] Extend with new VAE?
+- [ ] Tests
+- [ ] Docs
 
 ## Credits
 
