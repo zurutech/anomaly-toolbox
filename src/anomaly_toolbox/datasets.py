@@ -24,6 +24,7 @@ class MNISTDataset:
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
     ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
+        """Assemble train and test datasets."""
         pipeline = partial(
             MNISTDataset.pipeline,
             size=new_size,

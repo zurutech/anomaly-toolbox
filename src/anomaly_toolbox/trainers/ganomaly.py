@@ -1,11 +1,10 @@
 """Trainer for the GANomaly model."""
 
-from json import decoder
 from typing import Optional, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.python import training
+from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets import MNISTDataset
 from anomaly_toolbox.losses import ganomaly as losses
@@ -24,13 +23,12 @@ class GANomaly:
     input_dimension: Tuple[int, int, int] = (32, 32, 1)
     filters: int = 64
     latent_dimension: int = 100
+    ds_train: tf.data.Dataset
+    ds_train_anomalous: tf.data.Dataset
+    ds_test: tf.data.Dataset
+    ds_test_anomalous: tf.data.Dataset
 
-    def __init__(
-        self,
-        learning_rate: float,
-        train_log_dir: str,
-        test_log_dir: str,
-    ):
+    def __init__(self, learning_rate: float, summary_writer, hps):
         """Initialize GANomaly Networks."""
         print("Initializing GANomaly")
         # |--------|
@@ -85,8 +83,8 @@ class GANomaly:
         # |---------|
         # | LOGGING |
         # |---------|
-        self.train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-        self.test_summary_writer = tf.summary.create_file_writer(test_log_dir)
+        self.summary_writer = summary_writer
+        self.hps = hps
 
     def train(
         self,
@@ -127,7 +125,7 @@ class GANomaly:
                 training_reconstructions.append(x_hat)
                 # -----
                 if step % step_log_frequency == 0:
-                    with self.train_summary_writer.as_default():
+                    with self.summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
                     print(
                         "Step {:04d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f}, lr: {:.5f}".format(
@@ -144,7 +142,7 @@ class GANomaly:
             self.log(
                 input_data=training_data[0][:batch_size],
                 reconstructions=training_reconstructions[0][:batch_size],
-                summary_writer=self.train_summary_writer,
+                summary_writer=self.summary_writer,
                 step=step,
                 epoch=epoch,
                 d_loss_metric=self.epoch_d_loss_avg,
@@ -153,9 +151,12 @@ class GANomaly:
                 max_images_to_log=batch_size,
                 training=True,
             )
-            # Perform the test step
+
+            # |-----------------------|
+            # | Perform the test step |
+            # |-----------------------|
             if test_dataset:
-                self.test_phase(
+                _, _, _ = self.test_phase(
                     test_dataset=test_dataset,
                     use_bce=use_bce,
                     adversarial_loss_weight=adversarial_loss_weight,
@@ -178,7 +179,8 @@ class GANomaly:
         batch_size: int,
         step: int,
         epoch: int,
-    ) -> None:
+        log: bool = True,
+    ) -> Tuple:
         """Perform the test pass on a given test_dataset."""
         test_iterator = iter(test_dataset)
         testing_data, testing_reconstructions = [], []
@@ -194,20 +196,26 @@ class GANomaly:
             testing_data.append(test_x)
             testing_reconstructions.append(test_x_hat)
             # Update the losses metrics
-            self.epoch_d_loss_avg.update_state(test_d_loss)
-            self.epoch_g_loss_avg.update_state(test_g_loss)
-            self.epoch_e_loss_avg.update_state(test_e_loss)
-        self.log(
-            input_data=testing_data[0][:batch_size],
-            reconstructions=testing_reconstructions[0][:batch_size],
-            summary_writer=self.train_summary_writer,
-            step=step,
-            epoch=epoch,
-            d_loss_metric=self.epoch_d_loss_avg,
-            g_loss_metric=self.epoch_g_loss_avg,
-            e_loss_metric=self.epoch_e_loss_avg,
-            max_images_to_log=batch_size,
-            training=False,
+            self.test_d_loss_avg.update_state(test_d_loss)
+            self.test_g_loss_avg.update_state(test_g_loss)
+            self.test_e_loss_avg.update_state(test_e_loss)
+        if log:
+            self.log(
+                input_data=testing_data[0][:batch_size],
+                reconstructions=testing_reconstructions[0][:batch_size],
+                summary_writer=self.summary_writer,
+                step=step,
+                epoch=epoch,
+                d_loss_metric=self.test_d_loss_avg,
+                g_loss_metric=self.test_g_loss_avg,
+                e_loss_metric=self.test_e_loss_avg,
+                max_images_to_log=batch_size,
+                training=False,
+            )
+        return (
+            self.test_d_loss_avg.result(),
+            self.test_g_loss_avg.result(),
+            self.test_e_loss_avg.result(),
         )
 
     @tf.function
@@ -304,6 +312,7 @@ class GANomaly:
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
+        use_bce: bool,
     ) -> None:
         """
         Train GANomaly on MNIST dataset with one abnormal class.
@@ -318,24 +327,24 @@ class GANomaly:
         """
         ds_builder = MNISTDataset()
         (
-            ds_train,
-            ds_train_anomalous,
-            ds_test,
-            ds_test_anomalous,
+            self.ds_train,
+            self.ds_train_anomalous,
+            self.ds_test,
+            self.ds_test_anomalous,
         ) = ds_builder.assemble_datasets(
             anomalous_label=anomalous_label, batch_size=batch_size
         )
         self.train(
-            dataset=ds_train,
+            dataset=self.ds_train,
             # NOTE: steps_per_epoch = 60000 - 6000 filtered anomalous digits
             steps_per_epoch=54000 // batch_size,
             batch_size=batch_size,
             epoch=epoch,
-            use_bce=False,
+            use_bce=use_bce,
             adversarial_loss_weight=adversarial_loss_weight,
             contextual_loss_weight=contextual_loss_weight,
             enc_loss_weight=enc_loss_weight,
-            test_dataset=ds_test,
+            test_dataset=self.ds_test,
         )
 
     def log(
@@ -368,6 +377,7 @@ class GANomaly:
 
         """
         with summary_writer.as_default():
+            hp.hparams(self.hps)
             # -----
             # Logging scalars
             # -----
