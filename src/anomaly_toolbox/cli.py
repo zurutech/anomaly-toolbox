@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """Console script for anomaly_toolbox."""
-import logging
+
 import sys
 from datetime import datetime
 
 import click
-import tensorflow as tf
-
-from anomaly_toolbox.trainers import GANomaly
-import anomaly_toolbox.experiments.ganomaly as ganomaly_experiments
+import experiments.ganomaly as ganomaly_experiments
 
 
 @click.command()

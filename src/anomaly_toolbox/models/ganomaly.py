@@ -43,7 +43,6 @@ class GANomalyAssembler:
         """
         input_layer = keras.layers.Input(shape=input_dimension)
 
-        # -----------
         # Construct the the first block
         x = keras.layers.Conv2D(
             filters,
@@ -55,12 +54,10 @@ class GANomalyAssembler:
         )(input_layer)
         x = keras.layers.LeakyReLU(alpha=0.2)(x)
 
-        # -----------
         # Construct the various intermediate blocks
         channel_size = input_dimension[0] // 2
         while channel_size > 4:
-            filters = filters * 2
-            channel_size = channel_size // 2
+            filters *= 2
             x = keras.layers.Conv2D(
                 filters,
                 kernel_size=4,
@@ -72,7 +69,8 @@ class GANomalyAssembler:
             x = keras.layers.BatchNormalization()(x)
             x = keras.layers.LeakyReLU(alpha=0.2)(x)
 
-        # -----------
+            channel_size //= 2
+
         # Construct the final layer
         x = keras.layers.Conv2D(
             latent_space_dimension,
@@ -105,7 +103,6 @@ class GANomalyAssembler:
         """
         input_layer = keras.layers.Input(shape=(1, 1, input_dimension))
 
-        # -----------
         # Construct the the first block
         x = keras.layers.Conv2DTranspose(
             filters,
@@ -117,7 +114,6 @@ class GANomalyAssembler:
         )(input_layer)
         x = keras.layers.ReLU()(x)
 
-        # -----------
         # Construct the various intermediate blocks
         vector_size = 4
         while vector_size < output_dimension[0] // 2:
@@ -134,7 +130,6 @@ class GANomalyAssembler:
             x = keras.layers.BatchNormalization()(x)
             x = keras.layers.ReLU()(x)
 
-        # -----------
         # Construct the final layer
         x = keras.layers.Conv2DTranspose(
             output_dimension[-1],
@@ -150,7 +145,6 @@ class GANomalyAssembler:
         return decoder
 
 
-# TODO: See if rewriting with the Functional API simplifies the code
 class GANomalyDiscriminator(keras.Model):
     """Implementation of the GANomaly Discriminator using :class:`GANomalyAssembler`."""
 
@@ -181,22 +175,29 @@ class GANomalyDiscriminator(keras.Model):
         return classification, features
 
 
-# TODO: See if rewriting with the Functional API simplifies the code
 class GANomalyGenerator(keras.Model):
     """Implementation of the GANomaly Generator using :class:`GANomalyAssembler`."""
 
     def __init__(self, input_dimension, filters, latent_space_dimension):
         """Initialize the the model."""
         super().__init__()
-        self.encoder = GANomalyAssembler.assemble_encoder(
+        self.encoder1 = GANomalyAssembler.assemble_encoder(
             input_dimension, filters, latent_space_dimension
         )
+
         self.decoder = GANomalyAssembler.assemble_decoder(
             latent_space_dimension, input_dimension, filters
         )
 
-    def call(self, inputs, training: bool = True) -> Tuple[Any, Any]:
+        self.encoder2 = GANomalyAssembler.assemble_encoder(
+            input_dimension, filters, latent_space_dimension
+        )
+
+    def call(
+        self, inputs, training: bool = True
+    ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
         """Perform the forward pass."""
-        latent_i = self.encoder(inputs, training=training)
+        latent_i = self.encoder1(inputs, training=training)
         generated_data = self.decoder(latent_i, training=training)
-        return latent_i, generated_data
+        latent_o = self.encoder2(generated_data)
+        return latent_i, generated_data, latent_o

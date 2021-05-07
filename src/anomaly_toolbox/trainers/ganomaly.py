@@ -4,15 +4,10 @@ from typing import Optional, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
+from datasets import MNISTDataset
+from losses import ganomaly as losses
+from models import GANomalyAssembler, GANomalyDiscriminator, GANomalyGenerator
 from tensorboard.plugins.hparams import api as hp
-
-from anomaly_toolbox.datasets import MNISTDataset
-from anomaly_toolbox.losses import ganomaly as losses
-from anomaly_toolbox.models import (
-    GANomalyAssembler,
-    GANomalyDiscriminator,
-    GANomalyGenerator,
-)
 
 __ALL__ = ["GANomaly"]
 
@@ -34,8 +29,6 @@ class GANomaly:
         # |--------|
         # | MODELS |
         # |--------|
-        # NOTE: In our TF1 code we seem (I am not sure) to reuse the same encoder both for
-        # GE and for E, however reading the paper it seems to me that they are different
         self.discriminator = GANomalyDiscriminator(
             self.input_dimension,
             self.filters,
@@ -43,9 +36,16 @@ class GANomaly:
         self.generator = GANomalyGenerator(
             self.input_dimension, self.filters, self.latent_dimension
         )
-        self.encoder = GANomalyAssembler.assemble_encoder(
-            self.input_dimension, self.filters, self.latent_dimension
-        )
+        fake_batch_size = (1,) + self.input_dimension
+        self.discriminator(tf.zeros(fake_batch_size))
+        self.discriminator.summary()
+
+        self.generator(tf.zeros(fake_batch_size))
+        self.generator.summary()
+
+        # Losses
+        self._mse = tf.keras.losses.MeanSquaredError()
+        self._mae = tf.keras.losses.MeanAbsoluteError()
 
         # |------------|
         # | OPTIMIZERS |
@@ -90,44 +90,42 @@ class GANomaly:
         self,
         dataset: tf.data.Dataset,
         batch_size: int,
-        steps_per_epoch: int,
         epoch: int,
-        use_bce: bool,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
     ):
-        train_iterator = iter(dataset)
         for epoch in range(epoch):
             training_data, training_reconstructions = [], []
-            for _ in range(steps_per_epoch):
-                # -----
+            for batch in dataset:
                 # Perform the train step
-                (x, x_hat, d_loss, g_loss, e_loss,) = self.train_step(
-                    train_iterator,
-                    use_bce,
+                x, x_hat, d_loss, g_loss, e_loss = self.step_fn(
+                    batch,
                     adversarial_loss_weight,
                     contextual_loss_weight,
                     enc_loss_weight,
+                    training=True,
                 )
-                # -----
+
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
                 self.epoch_g_loss_avg.update_state(g_loss)
                 self.epoch_e_loss_avg.update_state(e_loss)
                 step = self.optimizer_d.iterations.numpy()
                 learning_rate = self.optimizer_ge.learning_rate.numpy()
-                # -----
+
                 # Save the input images and their reconstructions for later use
+
                 training_data.append(x)
                 training_reconstructions.append(x_hat)
-                # -----
+
                 if step % step_log_frequency == 0:
                     with self.summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
-                    print(
+
+                    tf.print(
                         "Step {:04d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f}, lr: {:.5f}".format(
                             step,
                             self.epoch_d_loss_avg.result(),
@@ -158,7 +156,6 @@ class GANomaly:
             if test_dataset:
                 _, _, _ = self.test_phase(
                     test_dataset=test_dataset,
-                    use_bce=use_bce,
                     adversarial_loss_weight=adversarial_loss_weight,
                     contextual_loss_weight=contextual_loss_weight,
                     enc_loss_weight=enc_loss_weight,
@@ -172,7 +169,6 @@ class GANomaly:
     def test_phase(
         self,
         test_dataset,
-        use_bce: bool,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
@@ -187,7 +183,6 @@ class GANomaly:
         for input_data in test_iterator:
             (test_x, test_x_hat, test_d_loss, test_g_loss, test_e_loss) = self.step_fn(
                 input_data,
-                use_bce,
                 adversarial_loss_weight,
                 contextual_loss_weight,
                 enc_loss_weight,
@@ -219,27 +214,9 @@ class GANomaly:
         )
 
     @tf.function
-    def train_step(
-        self,
-        train_iterator,
-        use_bce: bool,
-        adversarial_loss_weight: float,
-        contextual_loss_weight: float,
-        enc_loss_weight: float,
-    ):
-        return self.step_fn(
-            next(train_iterator),
-            use_bce=use_bce,
-            adversarial_loss_weight=adversarial_loss_weight,
-            contextual_loss_weight=contextual_loss_weight,
-            enc_loss_weight=enc_loss_weight,
-            training=True,
-        )
-
     def step_fn(
         self,
         inputs,
-        use_bce: bool,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
@@ -247,48 +224,32 @@ class GANomaly:
     ):
         x, y = inputs
         with tf.GradientTape(persistent=True) as tape:
+            # Reconstruction
+            z, x_hat, z_hat = self.generator(x, training=training)
+
             # Discriminator on real data
             d_x, d_f_x = self.discriminator(x, training=training)
 
-            # Reconstruction
-            z, x_hat = self.generator(x, training=training)
-            z_hat = self.encoder(x_hat, training=training)
-
             # Discriminator on x_hat
-            d_x_hat, d_f_x_hat = self.discriminator(x, training=training)
-
-            # d loss
-            d_loss = losses.discriminator_loss(d_x, d_x_hat)
+            d_x_hat, d_f_x_hat = self.discriminator(x_hat, training=training)
 
             # g loss
-            if use_bce:
-                adversarial_loss = losses.adversarial_loss_bce(d_x_hat)
-            else:
-                adversarial_loss = losses.adversarial_loss_fm(d_f_x, d_f_x_hat)
-
-            l1_loss = keras.losses.MeanAbsoluteError()(x, x_hat)
-            e_loss = keras.losses.MeanSquaredError()(z, z_hat)  # l2_loss
-
+            adversarial_loss = losses.adversarial_loss_fm(d_f_x, d_f_x_hat)
+            e_loss = self._mse(z, z_hat)  # encoder loss
+            l1_loss = self._mae(x, x_hat)  # contextual
             g_loss = (
                 adversarial_loss_weight * adversarial_loss
                 + contextual_loss_weight * l1_loss
                 + enc_loss_weight * e_loss
             )
 
-            # Loss Regularizers are computed manually
-            regularizer = tf.keras.regularizers.l2()
-            d_loss = regularizer(d_loss)
-            e_loss = regularizer(e_loss)
-            g_loss = regularizer(g_loss)
+            # d loss
+            d_loss = losses.discriminator_loss(d_x, d_x_hat)
 
         if training:
-            e_grads = tape.gradient(e_loss, self.encoder.trainable_variables)
             g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
             d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
 
-            self.optimizer_ge.apply_gradients(
-                zip(e_grads, self.encoder.trainable_variables)
-            )
             self.optimizer_ge.apply_gradients(
                 zip(g_grads, self.generator.trainable_variables)
             )
@@ -312,7 +273,6 @@ class GANomaly:
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
-        use_bce: bool,
     ) -> None:
         """
         Train GANomaly on MNIST dataset with one abnormal class.
@@ -336,11 +296,8 @@ class GANomaly:
         )
         self.train(
             dataset=self.ds_train,
-            # NOTE: steps_per_epoch = 60000 - 6000 filtered anomalous digits
-            steps_per_epoch=54000 // batch_size,
             batch_size=batch_size,
             epoch=epoch,
-            use_bce=use_bce,
             adversarial_loss_weight=adversarial_loss_weight,
             contextual_loss_weight=contextual_loss_weight,
             enc_loss_weight=enc_loss_weight,

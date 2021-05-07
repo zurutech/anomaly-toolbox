@@ -2,10 +2,9 @@ import itertools
 from typing import Dict, List, Tuple
 
 import tensorflow as tf
+from hps import convert_to_hps, grid_search
 from tensorboard.plugins.hparams import api as hp
-
-from anomaly_toolbox.hps import convert_to_hps, grid_search
-from anomaly_toolbox.trainers import GANomaly
+from trainers import GANomaly
 
 
 class ExperimentMNIST:
@@ -22,7 +21,6 @@ class ExperimentMNIST:
             "enc_loss_weight": {"type": hp.Discrete, "value": [1]},
             "shuffle_buffer_size": {"type": hp.Discrete, "value": [10000]},
             "latent_vector_size": {"type": hp.Discrete, "value": [50, 100]},
-            "use_bce": {"type": hp.Discrete, "value": [True]},
         },
         [
             hp.Metric("test_epoch_d_loss", display_name="Discriminator Loss"),
@@ -46,7 +44,6 @@ class ExperimentMNIST:
             batch_size=hps["batch_size"],
             epoch=hps["epoch"],
             anomalous_label=hps["anomalous_label"],
-            use_bce=hps["use_bce"],
             adversarial_loss_weight=hps["adversarial_loss_weight"],
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],
