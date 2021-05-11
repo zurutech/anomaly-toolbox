@@ -1,4 +1,4 @@
-"""All GANomaly experiments."""
+"""All EGBAD experiments."""
 
 from typing import Dict, List, Tuple
 
@@ -7,12 +7,12 @@ from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.hps import grid_search
 from anomaly_toolbox.experiments.interface import Experiment
-from anomaly_toolbox.trainers import GANomaly
+from anomaly_toolbox.trainers import EGBAD
 
-__ALL__ = ["GANomalyExperimentMNIST"]
+__ALL__ = ["EGBADExperimentMNIST"]
 
 
-class GANomalyExperimentMNIST(Experiment):
+class EGBADExperimentMNIST(Experiment):
     input_dimension: Tuple[int, int, int] = (32, 32, 1)
     filters: int = 64
     # --- HPS ---
@@ -38,7 +38,7 @@ class GANomalyExperimentMNIST(Experiment):
     def experiment_run(self, hps: Dict, log_dir: str):
         """Perform a single run of the model."""
         summary_writer = tf.summary.create_file_writer(log_dir)
-        trainer = GANomaly(
+        trainer = EGBAD(
             input_dimension=self.input_dimension,
             filters=self.filters,
             hps=hps,

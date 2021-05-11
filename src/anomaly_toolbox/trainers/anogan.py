@@ -10,7 +10,7 @@ from anomaly_toolbox.models import GANomalyDiscriminator, GANomalyGenerator
 __ALL__ = ["AnoGAN"]
 
 
-class AnoGAN:
+class AnoGAN(Trainer):
     """AnoGAN Trainer."""
 
     input_dimension: Tuple[int, int, int] = (64, 64, 3)
@@ -30,6 +30,9 @@ class AnoGAN:
     def train(self):
         pass
 
+    def test_phas(self):
+        pass
 
-class AnoganMNIST:
-    pass
+    @tf.function()
+    def step_fn(self):
+        pass

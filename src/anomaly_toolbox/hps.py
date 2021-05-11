@@ -1,3 +1,5 @@
+"""Common utilities for HPS search."""
+
 import itertools
 from typing import Dict, List, Tuple
 
@@ -5,22 +7,25 @@ import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
 
-def convert_to_hps(raw_hps: Dict[str, Dict]) -> List[hp.HParam]:
-    hps = [
-        hp.HParam(entry, raw_hps[entry]["type"](raw_hps[entry]["value"]))
-        for entry in raw_hps
-    ]
-    return hps
-
-
 def grid_search(
     experiment_func,
-    experiment_setup,
+    hps: List[hp.HParam],
+    metrics: List[hp.Metric],
     log_dir: str,
-):
-    hps = convert_to_hps(experiment_setup[0])
-    metrics = experiment_setup[1]
+) -> None:
+    """
+    Perform a grid search over the values of the hyperparameters passed.
 
+    Given a set of hyperparameters, this function firstly creates their combinatorial product
+    and then iterates over the result each time callin the given experiment_func.
+
+    Args:
+        experiment_func: Callable, usually coding a single run of the experiment
+        hps: List of hyperparameters, encoded as hp.HParam
+        metrics: List of metrics to log, encoded as hp.Metric
+        logd_dir: Log directory where the tf.summary.SummaryWriter will save data
+
+    """
     # Log the hps
     with tf.summary.create_file_writer(log_dir).as_default():
         hp.hparams_config(hparams=hps, metrics=metrics)
@@ -40,9 +45,8 @@ def grid_search(
         for i, entry in enumerate(hps):
             hps_run[entry.name] = hps_values[i]
         run_name = f"run-{session_num}"
-        print(f"--- Starting trial: {run_name}")
+        print(f"--- Starting trial: {run_name} ---")
         print(hps_run)
-        # TODO: actually run the experiment
         experiment_func(
             hps_run,
             log_dir + "/" + run_name,

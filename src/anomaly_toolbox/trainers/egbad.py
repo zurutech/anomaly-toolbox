@@ -1,4 +1,4 @@
-"""Trainer for the GANomaly model."""
+"""Trainer for the BiGAN model used in EGBAD."""
 
 from typing import Dict, Optional, Tuple
 
@@ -7,43 +7,42 @@ import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets import MNISTDataset
-from anomaly_toolbox.losses import ganomaly as losses
-from anomaly_toolbox.models import (
-    GANomalyAssembler,
-    GANomalyDiscriminator,
-    GANomalyGenerator,
-)
+from anomaly_toolbox.losses import egbad as losses
+from anomaly_toolbox.models import EGBADBiGANAssembler
 from anomaly_toolbox.trainers.interface import Trainer
 
-__ALL__ = ["GANomaly"]
+__ALL__ = ["EGBAD"]
 
 
-class GANomaly(Trainer):
-    """GANomaly Trainer."""
+class EGBAD(Trainer):
+    """EGBAD Trainer."""
 
     def __init__(
         self,
         input_dimension: Tuple[int, int, int],
         filters: int,
         hps: Dict,
-        summary_writer: tf.summary.SummaryWriter,
+        summary_writer: tf.summary.FileWriter,
     ):
-        """Initialize GANomaly Networks."""
-        print("Initializing GANomaly Trainer")
+        """Initialize EGBAD-BiGAN Networks."""
+        print("Initializing EGBAD-BiGAN Trainer")
         super().__init__(hps=hps, summary_writer=summary_writer)
         # |--------|
         # | MODELS |
         # |--------|
-        # NOTE: In our TF1 code we seem (I am not sure) to reuse the same encoder both for
-        # GE and for E, however reading the paper it seems to me that they are different
-        self.discriminator = GANomalyDiscriminator(input_dimension, filters)
-        self.generator = GANomalyGenerator(
-            input_dimension, filters, self.hps["latent_vector_size"]
+        self.discriminator = EGBADBiGANAssembler.assemble_discriminator(
+            input_dimension, filters, self.hps["latent_dimension"]
         )
-        self.encoder = GANomalyAssembler.assemble_encoder(
-            input_dimension, filters, self.hps["latent_vector_size"]
+        self.generator = EGBADBiGANAssembler.assemble_decoder(
+            input_dimension=self.hps["latent_dimension"],
+            output_dimension=input_dimension,
+            filters=filters,
         )
-
+        self.encoder = EGBADBiGANAssembler.assemble_encoder(
+            input_dimension=input_dimension,
+            filters=filters,
+            latent_space_dimension=hps["latent_dimension"],
+        )
         # |------------|
         # | OPTIMIZERS |
         # |------------|
@@ -391,7 +390,7 @@ class GANomaly(Trainer):
         use_bce: bool,
     ) -> None:
         """
-        Train GANomaly on MNIST dataset with one abnormal class.
+        Train EGBAD-BiGAN on MNIST dataset with one abnormal class.
 
         Args:
             batch_size: Batch size

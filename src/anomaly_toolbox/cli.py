@@ -7,23 +7,22 @@ from datetime import datetime
 
 import click
 import tensorflow as tf
-
-from anomaly_toolbox.trainers import GANomaly
-import anomaly_toolbox.experiments.ganomaly as ganomaly_experiments
+from anomaly_toolbox.experiments import AVAILABLE_EXPERIMENTS
 
 
 @click.command()
-def main(args=None):
+@click.option(
+    "chosen_experiment",
+    "--experiment",
+    help="Experiment to run",
+    type=click.Choice(list(AVAILABLE_EXPERIMENTS.keys()), case_sensitive=False),
+)
+def main(chosen_experiment: str):
     """Console script for anomaly_toolbox."""
-    click.echo(
-        "Replace this message by putting your code into " "anomaly_toolbox.cli.main"
-    )
-    click.echo("See click documentation at http://click.pocoo.org/")
-
     id = datetime.now().strftime("%Y%m%d-%H%M%S")
     log_dir = "logs/experiments/" + id
 
-    experiment = ganomaly_experiments.ExperimentMNIST(log_dir)
+    experiment = AVAILABLE_EXPERIMENTS[chosen_experiment.lower()](log_dir)
     experiment.run()
     return 0
 

@@ -1,5 +1,5 @@
 """
-BiGAN losses.
+BiGAN losses according to EGBAD.
 
 The losses here defined are the standard GAN losses (non saturating + sum BCEs).
 """

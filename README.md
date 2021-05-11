@@ -23,7 +23,7 @@ pip install anomaly-toolbox
 ## Usage
 
 ```
-anomaly_toolbox
+anomaly_toolbox --experiment
 ```
 
 ## Features
@@ -55,13 +55,13 @@ tox
 - [x] Implement Losses
 - [x] Implement Datasets (basics)
 - [ ] Implement Training
-    - [ ] Configure Experiments and HPs on TB
+    - [x] Configure Experiments and HPs on TB
     - [ ] Add AUC metric (or something like that)
-    - [ ] GANomaly
+    - [x] GANomaly
     - [ ] BiGAN
     - [ ] AnoGAN
+- [ ] Export SavedModel
 - [ ] Add a proper CLI
-- [ ] Use Logging
 - [ ] Implement Datasets (all)
 - [ ] Implement More Datasets
   - [ ] MNIST corrupted

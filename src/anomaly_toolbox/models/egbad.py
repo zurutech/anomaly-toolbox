@@ -1,18 +1,18 @@
-"""BiGAN Architecture Implementation."""
+"""BiGAN Architecture Implementation as used in EGBAD."""
 
 from typing import Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
 
-__ALL__ = ["BiGANAssembler"]
+__ALL__ = ["EGBADBiGANAssembler"]
 
 
 KERNEL_INITIALIZER = keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
 ALMOST_ONE = keras.initializers.RandomNormal(mean=1.0, stddev=0.02)
 
 
-class BiGANAssembler:
+class EGBADBiGANAssembler:
     """Assembler providind BiGAN primitive Encoder and Decoder architectures."""
 
     @staticmethod
@@ -23,7 +23,7 @@ class BiGANAssembler:
         l2_penalty: float = 0.0,
     ) -> tf.keras.Model:
         """
-        Assemble the GANomaly Encoder as a :obj:`tf.keras.Model` using Keras Functional API.
+        Assemble the EGBAD BiGAN Encoder as a :obj:`tf.keras.Model` using Keras Functional API.
 
         Note:
             This is designed to work with any image size ina fully-convolutional way.
@@ -97,7 +97,7 @@ class BiGANAssembler:
         l2_penalty: float = 0.0,
     ) -> tf.keras.Model:
         """
-        Assemble GANomaly Decoder as a :obj:`tf.keras.Model` using the Functional API.
+        Assemble EGBAD-BiGAN Decoder as a :obj:`tf.keras.Model` using the Functional API.
 
         Args:
             input_dimension: Dimension of the Latent vector produced by the Encoder.
@@ -167,7 +167,7 @@ class BiGANAssembler:
         latent_space_dimension: int = 100,
         l2_penalty: float = 0.0,
     ) -> keras.Model:
-        encoder = BiGANAssembler.assemble_encoder(
+        encoder = EGBADBiGANAssembler.assemble_encoder(
             input_dimension, filters, latent_space_dimension, l2_penalty
         )
         input_layer = keras.layers.Input(shape=input_dimension)
