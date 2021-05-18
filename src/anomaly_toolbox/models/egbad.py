@@ -19,7 +19,7 @@ class EGBADBiGANAssembler:
     def assemble_encoder(
         input_dimension: Tuple[int, int, int],
         filters: int,
-        latent_space_dimension: int = 100,
+        latent_space_dimension: int = 128,
         l2_penalty: float = 0.0,
     ) -> tf.keras.Model:
         """
@@ -164,7 +164,7 @@ class EGBADBiGANAssembler:
     def assemble_discriminator(
         input_dimension: Tuple[int, int, int],
         filters: int,
-        latent_space_dimension: int = 100,
+        latent_space_dimension: int = 128,
         l2_penalty: float = 0.0,
     ) -> keras.Model:
         encoder = EGBADBiGANAssembler.assemble_encoder(
@@ -172,7 +172,7 @@ class EGBADBiGANAssembler:
         )
         input_layer = keras.layers.Input(shape=input_dimension)
 
-        input_encoding = keras.layers.Input(shape=latent_space_dimension)
+        input_encoding = keras.layers.Input(shape=(1, 1, latent_space_dimension))
         d_z = keras.layers.Conv2D(
             128,
             (1, 1),

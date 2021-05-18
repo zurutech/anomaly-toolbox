@@ -22,7 +22,7 @@ class EGBAD(Trainer):
         input_dimension: Tuple[int, int, int],
         filters: int,
         hps: Dict,
-        summary_writer: tf.summary.FileWriter,
+        summary_writer: tf.summary.SummaryWriter,
     ):
         """Initialize EGBAD-BiGAN Networks."""
         print("Initializing EGBAD-BiGAN Trainer")
@@ -31,26 +31,40 @@ class EGBAD(Trainer):
         # | MODELS |
         # |--------|
         self.discriminator = EGBADBiGANAssembler.assemble_discriminator(
-            input_dimension, filters, self.hps["latent_dimension"]
+            input_dimension, filters, self.hps["latent_vector_size"]
         )
         self.generator = EGBADBiGANAssembler.assemble_decoder(
-            input_dimension=self.hps["latent_dimension"],
+            input_dimension=self.hps["latent_vector_size"],
             output_dimension=input_dimension,
             filters=filters,
         )
         self.encoder = EGBADBiGANAssembler.assemble_encoder(
             input_dimension=input_dimension,
             filters=filters,
-            latent_space_dimension=hps["latent_dimension"],
+            latent_space_dimension=self.hps["latent_vector_size"],
         )
+
+        fake_batch_size = (1,) + input_dimension
+        fake_latent_vector = (1,) + (1, 1, self.hps["latent_vector_size"])
+        self.generator(tf.zeros(fake_latent_vector))
+        self.encoder(tf.zeros(fake_batch_size))
+        self.discriminator([tf.zeros(fake_batch_size), tf.zeros(fake_latent_vector)])
+
+        self.generator.summary()
+        self.encoder.summary()
+        self.discriminator.summary()
+
         # |------------|
         # | OPTIMIZERS |
         # |------------|
         # TODO: These should be constructed from passed HPS
-        self.optimizer_ge = keras.optimizers.Adam(
+        self.optimizer_g = keras.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
         self.optimizer_d = keras.optimizers.Adam(
+            learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
+        )
+        self.optimizer_e = keras.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
 
@@ -81,45 +95,36 @@ class EGBAD(Trainer):
         self,
         dataset: tf.data.Dataset,
         batch_size: int,
-        steps_per_epoch: int,
         epoch: int,
-        use_bce: bool,
-        adversarial_loss_weight: float,
-        contextual_loss_weight: float,
-        enc_loss_weight: float,
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
-    ) -> None:
-        """Do a complete train."""
-        train_iterator = iter(dataset)
+    ):
         for epoch in range(epoch):
-            training_data, training_reconstructions = [], []
-            for _ in range(steps_per_epoch):
-                # -----
+            training_data, training_reconstructions, training_generated = [], [], []
+            for batch in dataset:
                 # Perform the train step
-                (x, x_hat, d_loss, g_loss, e_loss,) = self.train_step(
-                    train_iterator,
-                    use_bce,
-                    adversarial_loss_weight,
-                    contextual_loss_weight,
-                    enc_loss_weight,
+                x, x_hat, xz_hat, d_loss, g_loss, e_loss = self.step_fn(
+                    batch, batch_size=batch_size, training=True
                 )
-                # -----
+
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
                 self.epoch_g_loss_avg.update_state(g_loss)
                 self.epoch_e_loss_avg.update_state(e_loss)
                 step = self.optimizer_d.iterations.numpy()
-                learning_rate = self.optimizer_ge.learning_rate.numpy()
-                # -----
+                learning_rate = self.optimizer_g.learning_rate.numpy()
+
                 # Save the input images and their reconstructions for later use
+
                 training_data.append(x)
-                training_reconstructions.append(x_hat)
-                # -----
+                training_generated.append(x_hat)
+                training_reconstructions.append(xz_hat)
+
                 if step % step_log_frequency == 0:
                     with self.summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
-                    print(
+
+                    tf.print(
                         "Step {:04d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f}, lr: {:.5f}".format(
                             step,
                             self.epoch_d_loss_avg.result(),
@@ -134,6 +139,7 @@ class EGBAD(Trainer):
             self.log(
                 input_data=training_data[-1][:batch_size],
                 reconstructions=training_reconstructions[-1][:batch_size],
+                generated=training_generated[-1][:batch_size],
                 summary_writer=self.summary_writer,
                 step=step,
                 epoch=epoch,
@@ -150,10 +156,6 @@ class EGBAD(Trainer):
             if test_dataset:
                 _, _, _ = self.test_phase(
                     test_dataset=test_dataset,
-                    use_bce=use_bce,
-                    adversarial_loss_weight=adversarial_loss_weight,
-                    contextual_loss_weight=contextual_loss_weight,
-                    enc_loss_weight=enc_loss_weight,
                     batch_size=batch_size,
                     epoch=epoch,
                     step=step,
@@ -164,10 +166,6 @@ class EGBAD(Trainer):
     def test_phase(
         self,
         test_dataset,
-        use_bce: bool,
-        adversarial_loss_weight: float,
-        contextual_loss_weight: float,
-        enc_loss_weight: float,
         batch_size: int,
         step: int,
         epoch: int,
@@ -175,18 +173,19 @@ class EGBAD(Trainer):
     ) -> Tuple:
         """Perform the test pass on a given test_dataset."""
         test_iterator = iter(test_dataset)
-        testing_data, testing_reconstructions = [], []
+        testing_data, testing_reconstructions, testing_generated = [], [], []
         for input_data in test_iterator:
-            (test_x, test_x_hat, test_d_loss, test_g_loss, test_e_loss) = self.step_fn(
-                input_data,
-                use_bce,
-                adversarial_loss_weight,
-                contextual_loss_weight,
-                enc_loss_weight,
-                training=False,
-            )
+            (
+                test_x,
+                test_x_hat,
+                test_xz_hat,
+                test_d_loss,
+                test_g_loss,
+                test_e_loss,
+            ) = self.step_fn(input_data, training=False)
             testing_data.append(test_x)
-            testing_reconstructions.append(test_x_hat)
+            testing_generated.append(test_x_hat)
+            testing_reconstructions.append(test_xz_hat)
             # Update the losses metrics
             self.test_d_loss_avg.update_state(test_d_loss)
             self.test_g_loss_avg.update_state(test_g_loss)
@@ -195,6 +194,7 @@ class EGBAD(Trainer):
             self.log(
                 input_data=testing_data[0][:batch_size],
                 reconstructions=testing_reconstructions[0][:batch_size],
+                generated=testing_generated[0][:batch_size],
                 summary_writer=self.summary_writer,
                 step=step,
                 epoch=epoch,
@@ -211,88 +211,52 @@ class EGBAD(Trainer):
         )
 
     @tf.function
-    def train_step(
-        self,
-        train_iterator,
-        use_bce: bool,
-        adversarial_loss_weight: float,
-        contextual_loss_weight: float,
-        enc_loss_weight: float,
-    ):
-        """tf.function() wrapper for the training step."""
-        return self.step_fn(
-            next(train_iterator),
-            use_bce=use_bce,
-            adversarial_loss_weight=adversarial_loss_weight,
-            contextual_loss_weight=contextual_loss_weight,
-            enc_loss_weight=enc_loss_weight,
-            training=True,
-        )
-
     def step_fn(
         self,
         inputs,
-        use_bce: bool,
-        adversarial_loss_weight: float,
-        contextual_loss_weight: float,
-        enc_loss_weight: float,
+        batch_size,
         training: bool = True,
     ):
         """Single training step."""
+        noise = tf.random.normal((batch_size, 1, 1, self.hps["latent_vector_size"]))
         x, y = inputs
         with tf.GradientTape(persistent=True) as tape:
-            # Discriminator on real data
-            d_x, d_f_x = self.discriminator(x, training=training)
-
             # Reconstruction
-            z, x_hat = self.generator(x, training=training)
-            z_hat = self.encoder(x_hat, training=training)
+            x_hat = self.generator(noise, training=training)
 
-            # Discriminator on x_hat
-            d_x_hat, d_f_x_hat = self.discriminator(x, training=training)
+            z = self.encoder(x, training=training)
+            xz_hat = self.generator(z, training=training)
 
-            # d loss
-            d_loss = losses.discriminator_loss(d_x, d_x_hat)
-
-            # g loss
-            if use_bce:
-                adversarial_loss = losses.adversarial_loss_bce(d_x_hat)
-            else:
-                adversarial_loss = losses.adversarial_loss_fm(d_f_x, d_f_x_hat)
-
-            l1_loss = keras.losses.MeanAbsoluteError()(x, x_hat)
-            e_loss = keras.losses.MeanSquaredError()(z, z_hat)  # l2_loss
-
-            g_loss = (
-                adversarial_loss_weight * adversarial_loss
-                + contextual_loss_weight * l1_loss
-                + enc_loss_weight * e_loss
+            d_x, x_features = self.discriminator([x, z], training=training)
+            d_x_hat, x_hat_features = self.discriminator(
+                [x_hat, noise], training=training
             )
 
-            # Loss Regularizers are computed manually
-            regularizer = tf.keras.regularizers.l2()
-            d_loss = regularizer(d_loss)
-            e_loss = regularizer(e_loss)
-            g_loss = regularizer(g_loss)
+            # Losses
+            d_loss = losses.discriminator_loss(d_x, d_x_hat)
+            g_loss = losses.adversarial_loss_fm(x_hat_features, x_features)
+            e_loss = losses.encoder_loss(d_x)
 
         if training:
-            e_grads = tape.gradient(e_loss, self.encoder.trainable_variables)
-            g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
             d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
+            g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
+            e_grads = tape.gradient(e_loss, self.encoder.trainable_variables)
 
-            self.optimizer_ge.apply_gradients(
-                zip(e_grads, self.encoder.trainable_variables)
-            )
-            self.optimizer_ge.apply_gradients(
-                zip(g_grads, self.generator.trainable_variables)
-            )
             self.optimizer_d.apply_gradients(
                 zip(d_grads, self.discriminator.trainable_variables)
             )
+            self.optimizer_g.apply_gradients(
+                zip(g_grads, self.generator.trainable_variables)
+            )
+            self.optimizer_e.apply_gradients(
+                zip(e_grads, self.encoder.trainable_variables)
+            )
         del tape
+
         return (
             x,
             x_hat,
+            xz_hat,
             d_loss,
             g_loss,
             e_loss,
@@ -302,6 +266,7 @@ class EGBAD(Trainer):
         self,
         input_data,
         reconstructions,
+        generated,
         summary_writer,
         step: int,
         epoch: int,
@@ -317,6 +282,7 @@ class EGBAD(Trainer):
         Args:
             input_data: Input images
             reconstructions: Reconstructions
+            generated: Generated images from noise
             summary_writer: TensorFlow SummaryWriter to use for logging
             step: Current step
             epoch: Current epoch
@@ -357,6 +323,12 @@ class EGBAD(Trainer):
                 step=step,
             )
             tf.summary.image(
+                "training_generations" if training else "test_generations",
+                generated,
+                max_outputs=max_images_to_log,
+                step=step,
+            )
+            tf.summary.image(
                 "training_reconstructions" if training else "test_reconstructions",
                 reconstructions,
                 max_outputs=max_images_to_log,
@@ -384,23 +356,17 @@ class EGBAD(Trainer):
         batch_size: int,
         epoch: int,
         anomalous_label: int,
-        adversarial_loss_weight: float,
-        contextual_loss_weight: float,
-        enc_loss_weight: float,
-        use_bce: bool,
     ) -> None:
         """
-        Train EGBAD-BiGAN on MNIST dataset with one abnormal class.
+        Train GANomaly on MNIST dataset with one abnormal class.
 
         Args:
-            batch_size: Batch size
-            epoch: How many epoch to train for
-            anomalous_label: Label kepts as anomalous
+            batch_size:
+            epoch:
+            anomalous_label:
             adversarial_loss_weight: weight for the adversarial loss
             contextual_loss_weight: weight for the contextual loss (reconstruction loss)
             enc_loss_weight: weight for the encoder loss
-            use_bce: Flag controlling wether the model should be trained with BCE or Feature Matching loss
-
         """
         ds_builder = MNISTDataset()
         (
@@ -413,13 +379,7 @@ class EGBAD(Trainer):
         )
         self.train(
             dataset=self.ds_train,
-            # NOTE: steps_per_epoch = 60000 - 6000 filtered anomalous digits
-            steps_per_epoch=54000 // batch_size,
             batch_size=batch_size,
             epoch=epoch,
-            use_bce=use_bce,
-            adversarial_loss_weight=adversarial_loss_weight,
-            contextual_loss_weight=contextual_loss_weight,
-            enc_loss_weight=enc_loss_weight,
             test_dataset=self.ds_test,
         )

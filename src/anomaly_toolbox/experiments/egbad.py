@@ -22,12 +22,8 @@ class EGBADExperimentMNIST(Experiment):
         hp.HParam("batch_size", hp.Discrete([32])),
         hp.HParam("optimizer", hp.Discrete(["adam"])),  # NOTE: Currently unused
         hp.HParam("learning_rate", hp.Discrete([0.002, 0.001, 0.0005])),
-        hp.HParam("adversarial_loss_weight", hp.Discrete([1])),
-        hp.HParam("contextual_loss_weight", hp.Discrete([50])),
-        hp.HParam("enc_loss_weight", hp.Discrete([1])),
         hp.HParam("shuffle_buffer_size", hp.Discrete([10000])),
-        hp.HParam("latent_vector_size", hp.Discrete([100])),
-        hp.HParam("use_bce", hp.Discrete([True, False])),
+        hp.HParam("latent_vector_size", hp.Discrete([128])),
     ]
     metrics: List[hp.Metric] = [
         hp.Metric("test_epoch_d_loss", display_name="Discriminator Loss"),
@@ -48,10 +44,6 @@ class EGBADExperimentMNIST(Experiment):
             batch_size=hps["batch_size"],
             epoch=hps["epoch"],
             anomalous_label=hps["anomalous_label"],
-            use_bce=hps["use_bce"],
-            adversarial_loss_weight=hps["adversarial_loss_weight"],
-            contextual_loss_weight=hps["contextual_loss_weight"],
-            enc_loss_weight=hps["enc_loss_weight"],
         )
 
     def run(self):

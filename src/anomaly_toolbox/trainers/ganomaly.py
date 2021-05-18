@@ -4,10 +4,17 @@ from typing import Dict, Optional, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
-from datasets import MNISTDataset
-from losses import ganomaly as losses
-from models import GANomalyAssembler, GANomalyDiscriminator, GANomalyGenerator
 from tensorboard.plugins.hparams import api as hp
+
+from anomaly_toolbox.datasets import MNISTDataset
+from anomaly_toolbox.losses import ganomaly as losses
+from anomaly_toolbox.models import (
+    GANomalyAssembler,
+    GANomalyDiscriminator,
+    GANomalyGenerator,
+)
+
+from .interface import Trainer
 
 __ALL__ = ["GANomaly"]
 
@@ -28,14 +35,11 @@ class GANomaly(Trainer):
         # |--------|
         # | MODELS |
         # |--------|
-        self.discriminator = GANomalyDiscriminator(
-            self.input_dimension,
-            self.filters,
-        )
+        self.discriminator = GANomalyDiscriminator(input_dimension, filters)
         self.generator = GANomalyGenerator(
             input_dimension, filters, self.hps["latent_vector_size"]
         )
-        fake_batch_size = (1,) + self.input_dimension
+        fake_batch_size = (1,) + input_dimension
         self.discriminator(tf.zeros(fake_batch_size))
         self.discriminator.summary()
 

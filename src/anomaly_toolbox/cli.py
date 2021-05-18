@@ -7,7 +7,7 @@ from datetime import datetime
 
 import click
 
-from experiments import AVAILABLE_EXPERIMENTS
+from anomaly_toolbox.experiments import AVAILABLE_EXPERIMENTS
 
 
 @click.command()

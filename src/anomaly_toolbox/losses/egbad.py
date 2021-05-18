@@ -5,6 +5,33 @@ The losses here defined are the standard GAN losses (non saturating + sum BCEs).
 """
 
 import tensorflow as tf
+from tensorflow import keras
+
+
+def discriminator_loss(d_real, d_gen):
+    """
+    Compute the discriminator loss.
+
+    Args:
+        d_real: Output of the Discriminator when fed with real data.
+        d_gen: Output of the Discriminator when fed with generated data.
+
+    Returns:
+        Loss on real data + Loss on generated data.
+    """
+    real_loss = keras.losses.binary_crossentropy(
+        tf.ones_like(d_real), d_real, from_logits=True
+    )
+    generated_loss = keras.losses.binary_crossentropy(
+        tf.zeros_like(d_gen), d_gen, from_logits=True
+    )
+    return real_loss + generated_loss
+
+
+def encoder_loss(d_real):
+    return keras.losses.binary_crossentropy(
+        tf.zeros_like(d_real), d_real, from_logits=True
+    )
 
 
 def smooth(label):
@@ -28,59 +55,25 @@ def smooth(label):
     )
 
 
-def bce(x, label):
+def adversarial_loss_bce(d_gen):
+    return keras.losses.binary_crossentropy(
+        tf.ones_like(d_gen), d_gen, from_logits=True
+    )
+
+
+def adversarial_loss_fm(feature_a, feature_b):
     """
-    Return the discrete binary cross entropy between x and the discrete label.
+    Compute the adversarial feature matching loss.
 
     Args:
-        x: a 2D tensor
-        label: the discrite label, aka, the distribution to match
+        feature_a: input image feature
+        feature_b: generated image feature
 
     Returns:
-        The binary cros entropy
+        the value of the adversarial loss
+
     """
-    assert len(x.shape) == 2 and len(label.shape) == 0
-    return tf.nn.sigmoid_cross_entropy(tf.ones_like(x) * label, x)
-
-
-def min_max(positive, negative, label_smooth=False) -> tf.Tensor:
-    """
-    Return the discriminator (min max) loss.
-
-    Args:
-        positive: the discriminator output for the positive class: 2D tensor
-        negative: the discriminator output for the negative class: 2D tensor
-        smooth: when true, appiles one-sided label smoothing
-
-    Returns:
-        The sum of 2 BCE
-    """
-    if label_smooth:
-        one = smooth(1.0)
-    else:
-        one = tf.constant(1.0)
-    zero = tf.constant(0.0)
-    d_loss = bce(positive, one) + bce(negative, zero)
-    return d_loss
-
-
-def feature_matching_loss(feature_a, feature_b) -> tf.Tensor:
-    """
-    Return the feature matching loss between a and b.
-
-    Args:
-        feature_a: first tensor: 2D tensor (bs, feature)
-        feature_b: second tensor: 2D tensor (bs, feature)
-
-    Returns:
-        The feature matching between feature_a and feature_b
-        mean|mean(feature_a) - mean(feature_b)|²
-    """
-    assert len(feature_a.shape) == 2 and len(feature_b.shape) == 2
-    mean_a = tf.reduce_mean(feature_a, axis=0)
-    mean_b = tf.reduce_mean(feature_b, axis=0)
-    fm = tf.reduce_mean(tf.math.squared_difference(mean_a, mean_b))
-    return fm
+    return keras.losses.mean_squared_error(feature_a, feature_b)
 
 
 def residual_loss(x, Gz):
@@ -97,3 +90,24 @@ def residual_loss(x, Gz):
     assert x.shape == Gz.shape
     flat = (-1, x.shape[1] * x.shape[2] * x.shape[3])
     return tf.reduce_mean(tf.reshape(tf.abs(Gz - x), flat))
+
+
+# def min_max(positive, negative, label_smooth=False) -> tf.Tensor:
+#     """
+#     Return the discriminator (min max) loss.
+
+#     Args:
+#         positive: the discriminator output for the positive class: 2D tensor
+#         negative: the discriminator output for the negative class: 2D tensor
+#         smooth: when true, appiles one-sided label smoothing
+
+#     Returns:
+#         The sum of 2 BCE
+#     """
+#     if label_smooth:
+#         one = smooth(1.0)
+#     else:
+#         one = tf.constant(1.0)
+#     zero = tf.constant(0.0)
+#     d_loss = bce(positive, one) + bce(negative, zero)
+#     return d_loss
