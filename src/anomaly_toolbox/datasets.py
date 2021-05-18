@@ -2,8 +2,8 @@ from functools import partial
 from typing import Tuple
 
 import tensorflow as tf
-from tensorflow._api.v2 import data
 import tensorflow_datasets as tfds
+from tensorflow._api.v2 import data
 from tensorflow.python.ops.image_ops_impl import ResizeMethod, resize_nearest_neighbor
 
 
@@ -74,7 +74,6 @@ class MNISTDataset:
         dataset = dataset.map(MNISTDataset.scale)
         if is_training:
             dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
-            dataset = dataset.repeat()
         dataset = dataset.batch(batch_size)
         if cache:
             dataset = dataset.cache()

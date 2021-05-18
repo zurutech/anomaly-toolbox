@@ -3,11 +3,12 @@
 from typing import Dict, List, Tuple
 
 import tensorflow as tf
+from hps import grid_search
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.hps import grid_search
-from anomaly_toolbox.experiments.interface import Experiment
-from anomaly_toolbox.trainers import GANomaly
+from experiments.interface import Experiment
+from hps import grid_search
+from trainers import GANomaly
 
 __ALL__ = ["GANomalyExperimentMNIST"]
 
@@ -20,14 +21,13 @@ class GANomalyExperimentMNIST(Experiment):
         hp.HParam("anomalous_label", hp.Discrete([2])),
         hp.HParam("epoch", hp.Discrete([1, 5, 10, 15])),
         hp.HParam("batch_size", hp.Discrete([32])),
-        hp.HParam("optimizer", hp.Discrete(["adam"])),  # NOTE: Currently unused
+        hp.HParam("optimizer", hp.Discrete(["adam"])),
         hp.HParam("learning_rate", hp.Discrete([0.002, 0.001, 0.0005])),
         hp.HParam("adversarial_loss_weight", hp.Discrete([1])),
         hp.HParam("contextual_loss_weight", hp.Discrete([50])),
         hp.HParam("enc_loss_weight", hp.Discrete([1])),
         hp.HParam("shuffle_buffer_size", hp.Discrete([10000])),
         hp.HParam("latent_vector_size", hp.Discrete([100])),
-        hp.HParam("use_bce", hp.Discrete([True, False])),
     ]
     metrics: List[hp.Metric] = [
         hp.Metric("test_epoch_d_loss", display_name="Discriminator Loss"),
@@ -48,7 +48,6 @@ class GANomalyExperimentMNIST(Experiment):
             batch_size=hps["batch_size"],
             epoch=hps["epoch"],
             anomalous_label=hps["anomalous_label"],
-            use_bce=hps["use_bce"],
             adversarial_loss_weight=hps["adversarial_loss_weight"],
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],

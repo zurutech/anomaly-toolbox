@@ -136,31 +136,19 @@ class AnoGANMNISTAssembler:
     def assemble_generator() -> keras.Model:
         input_layer = keras.layers.Input()
 
-        x = keras.layers.Dense(7 * 7 * 64, use_bias=False)(input_layer)
+        x = keras.layers.Dense(7 * 7 * 128)(input_layer)
         x = keras.layers.BatchNormalization()(x)
-        x = keras.layers.ReLU()(x)
-        x = keras.layers.Reshape((-1, 7, 7, 64))(x)
+        x = keras.layers.LeakyReLU(0.2)(x)
+        x = keras.layers.Reshape((7, 7, 128))(x)
 
-        x = keras.layers.Conv2DTranspose(
-            64, (5, 5), strides=(1, 1), padding="same", use_bias=False
-        )(x)
-        x = keras.layers.BatchNormalization()(x)
-        x = keras.layers.ReLU()(x)
-
-        x = keras.layers.Conv2DTranspose(
-            32, (5, 5), strides=(2, 2), padding="same", use_bias=False
-        )(x)
+        x = keras.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
+        x = keras.layers.Conv2D(64, (2, 2), padding="same")(x)
         x = keras.layers.BatchNormalization()(x)
         x = keras.layers.ReLU()(x)
 
-        x = keras.layers.Conv2DTranspose(
-            1,
-            (5, 5),
-            strides=(2, 2),
-            activation="tanh",
-            padding="same",
-            use_bias=False,
-        )(x)
+        x = keras.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
+        x = keras.layers.Conv2D(64, (5, 5), padding="same")(x)
+        x = keras.layers.Activation("tanh")(x)
         model = keras.Model(input_layer, x, name="anogan_mnist_generator")
         return model
 
@@ -168,13 +156,13 @@ class AnoGANMNISTAssembler:
     def assemble_discriminator() -> keras.Model:
         input_layer = keras.layers.Input(shape=(28, 28, 1))
 
-        x = keras.layers.Conv2D(64, (5, 5), strides=(2, 2), padding="same")(input_layer)
-        x = keras.layers.LeakyReLU()(x)
-        x = keras.layers.Dropout(0.3)(x)
+        x = keras.layers.Conv2D(64, (5, 5), padding="same")(input_layer)
+        x = keras.layers.LeakyReLU(0.2)(x)
+        x = keras.layers.MaxPool2D(pool_size=(2, 2))(x)
 
         x = keras.layers.Conv2D(128, (5, 5), strides=(2, 2), padding="same")(x)
-        x = keras.layers.LeakyReLU()(x)
-        x = keras.layers.Dropout(0.3)(x)
+        x = keras.layers.LeakyReLU(0.2)(x)
+        x = keras.layers.MaxPool2D(pool_size=(2, 2))(x)
 
         x = keras.layers.Flatten()(x)
         x = keras.layers.Dense(1)(x)

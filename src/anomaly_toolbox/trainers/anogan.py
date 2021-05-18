@@ -4,8 +4,7 @@ from typing import Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
-
-from anomaly_toolbox.models import GANomalyDiscriminator, GANomalyGenerator
+from models import GANomalyDiscriminator, GANomalyGenerator
 
 __ALL__ = ["AnoGAN"]
 

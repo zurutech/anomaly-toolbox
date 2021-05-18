@@ -32,7 +32,9 @@ def bce(x, label):
         The binary cros entropy
     """
     assert len(x.shape) == 2 and len(label.shape) == 0
-    return tf.nn.sigmoid_cross_entropy(tf.ones_like(x) * label, x)
+    return tf.keras.losses.BinaryCrossentropy(from_logits=True)(
+        y_true=tf.ones_like(x) * label, y_pred=x
+    )
 
 
 def min_max(positive, negative, label_smooth: bool = False):
