@@ -1,4 +1,7 @@
 """Collection of Trainers."""
 
-from .ganomaly import GANomaly
+from .anogan import AnoGAN, AnoGANMNIST
 from .egbad import EGBAD
+from .ganomaly import GANomaly
+
+__ALL__ = ["AnoGAN", "AnoGANMNIST", "EGBAD", "GANomaly"]

@@ -5,6 +5,8 @@ from typing import Any, List, Tuple
 import tensorflow as tf
 import tensorflow.keras as keras
 
+__ALL__ = ["AnoGANAssembler", "AnoGANMNISTAssembler"]
+
 
 class AnoGANAssembler:
     @staticmethod
@@ -14,10 +16,10 @@ class AnoGANAssembler:
         filters: int,
     ) -> tf.keras.Model:
         """
-        GANomaly Encoder implementation as a :obj:`tf.keras.Model`.
+        AnoGAN Generator implementation as a :obj:`tf.keras.Model`.
 
         Args:
-            input_dimension: Dimension of the Latent vector produced by the Encoder.
+            input_dimension: Dimension of the input latent (noise) vector.
             output: Desired dimension of the output vector.
             filters: Filters of the first transposed convolution.
 
@@ -77,10 +79,12 @@ class AnoGANAssembler:
         filters: int,
     ) -> tf.keras.Model:
         """
-        GANomaly Encoder implementation as a :obj:`tf.keras.Model`.
+        Assemble an AnoGAN discriminator implemented as a :obj:`tf.keras.Model`.
 
         Args:
-            filters of the first convolution (there will be log2(channel) conv)
+            input_dimension: dimension of the input data
+            filters: filters of the first convolution (there will be log2(channel) conv)
+
         """
         input_layer = keras.layers.Input(shape=input_dimension)
 
@@ -122,10 +126,13 @@ class AnoGANAssembler:
         #     padding="same",
         #     use_bias=False,
         # )(x)
-        x = keras.layers.Flatten()(x)
+        features = x
+        x = keras.layers.Flatten()(features)
         x = keras.layers.Dense(1)
 
-        encoder = tf.keras.Model(input_layer, x, name="ganomaly_encoder")
+        encoder = tf.keras.Model(
+            input_layer, [x, features], name="anogan_discrimininator"
+        )
         return encoder
 
 
@@ -133,8 +140,8 @@ class AnoGANMNISTAssembler:
     """Hardcoded GAN for the MNIST dataset."""
 
     @staticmethod
-    def assemble_generator() -> keras.Model:
-        input_layer = keras.layers.Input()
+    def assemble_generator(input_dimension: int) -> keras.Model:
+        input_layer = keras.layers.Input(shape=(1, 1, input_dimension))
 
         x = keras.layers.Dense(7 * 7 * 128)(input_layer)
         x = keras.layers.BatchNormalization()(x)
@@ -147,7 +154,7 @@ class AnoGANMNISTAssembler:
         x = keras.layers.ReLU()(x)
 
         x = keras.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
-        x = keras.layers.Conv2D(64, (5, 5), padding="same")(x)
+        x = keras.layers.Conv2D(1, (5, 5), padding="same")(x)
         x = keras.layers.Activation("tanh")(x)
         model = keras.Model(input_layer, x, name="anogan_mnist_generator")
         return model
@@ -158,14 +165,17 @@ class AnoGANMNISTAssembler:
 
         x = keras.layers.Conv2D(64, (5, 5), padding="same")(input_layer)
         x = keras.layers.LeakyReLU(0.2)(x)
-        x = keras.layers.MaxPool2D(pool_size=(2, 2))(x)
+        features = keras.layers.MaxPool2D(pool_size=(2, 2))(x)
+        # NOTE: https://github.com/tkwoo/anogan-keras/blob/master/anogan.py
 
-        x = keras.layers.Conv2D(128, (5, 5), strides=(2, 2), padding="same")(x)
+        x = keras.layers.Conv2D(128, (5, 5), strides=(2, 2), padding="same")(features)
         x = keras.layers.LeakyReLU(0.2)(x)
         x = keras.layers.MaxPool2D(pool_size=(2, 2))(x)
 
         x = keras.layers.Flatten()(x)
         x = keras.layers.Dense(1)(x)
 
-        model = keras.Model(input_layer, x, name="anogan_mninst_discriminator")
+        model = keras.Model(
+            input_layer, outputs=[x, features], name="anogan_mninst_discriminator"
+        )
         return model

@@ -372,7 +372,7 @@ class GANomaly(Trainer):
             self.ds_test,
             self.ds_test_anomalous,
         ) = ds_builder.assemble_datasets(
-            anomalous_label=anomalous_label, batch_size=batch_size
+            anomalous_label=anomalous_label, batch_size=batch_size, new_size=(32, 32)
         )
         self.train(
             dataset=self.ds_train,

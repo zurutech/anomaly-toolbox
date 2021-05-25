@@ -20,7 +20,7 @@ class MNISTDataset:
         self,
         anomalous_label: int,
         batch_size: int,
-        new_size: Tuple[int, int] = (32, 32),
+        new_size: Tuple[int, int] = (28, 28),
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
     ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
@@ -57,7 +57,9 @@ class MNISTDataset:
                 image,
                 size=size,
                 method=tf.image.ResizeMethod.NEAREST_NEIGHBOR,
-            ),
+            )
+            if size != (28, 28)
+            else image,
             label,
         )
 

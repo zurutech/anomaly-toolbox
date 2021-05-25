@@ -56,21 +56,25 @@ tox
 - [x] Implement Datasets (basics)
 - [ ] Implement Training
     - [x] Configure Experiments and HPs on TB
-    - [ ] Add AUC metric (or something like that)
     - [x] GANomaly
     - [x] BiGAN
-    - [ ] AnoGAN
+    - [x] AnoGAN
 - [ ] Export SavedModel
+- [ ] Add a dedicated predictor module
+  - [ ] Add AUC metric (or something like that)
+  - [ ] Benchmark!
 - [x] Add a proper CLI
   - [ ] Expand the CLI by allowing the passing of a file with an Experiment to run
 - [ ] Implement Datasets (all)
 - [ ] Implement More Datasets
   - [ ] MNIST corrupted
   - [ ] Chest X-RAY
+  - [ ] NVIDIA Industrial Semantic Segmentation
 - [ ] Implement more models
   - [ ] FastAnoGAN
   - [ ] DeScarGAN
   - [ ] Extend with new VAE?
+  - [ ] Extend with new Diffusion Model?
 - [ ] Tests
 - [ ] Docs
 
