@@ -384,5 +384,5 @@ class EGBAD(Trainer):
             dataset=self.ds_train,
             batch_size=batch_size,
             epoch=epoch,
-            # test_dataset=self.ds_test,
+            test_dataset=self.ds_test,
         )
