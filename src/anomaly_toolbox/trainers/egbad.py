@@ -182,7 +182,7 @@ class EGBAD(Trainer):
                 test_d_loss,
                 test_g_loss,
                 test_e_loss,
-            ) = self.step_fn(input_data, training=False)
+            ) = self.step_fn(input_data, batch_size=batch_size, training=False)
             testing_data.append(test_x)
             testing_generated.append(test_x_hat)
             testing_reconstructions.append(test_xz_hat)
@@ -378,7 +378,7 @@ class EGBAD(Trainer):
             anomalous_label=anomalous_label,
             batch_size=batch_size,
             new_size=(32, 32),
-            cache=False,
+            drop_remainder=True,
         )
         self.train(
             dataset=self.ds_train,

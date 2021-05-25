@@ -26,15 +26,7 @@ def adversarial_loss(d_real, d_gen):
     generated_loss = keras.losses.binary_crossentropy(
         tf.zeros_like(d_gen), d_gen, from_logits=True
     )
-    tf.print("DEBUG inside loss")
-    tf.print(d_gen.shape)
-    tf.print(real_loss.shape)
-    tf.print(generated_loss.shape)
-    # tf.assert_equal(real_loss.shape, generated_loss.shape)
-    loss = real_loss + generated_loss
-    tf.print(loss.shape)
-    tf.print("DEBUG outside loss")
-    return loss
+    return real_loss + generated_loss
 
 
 def feature_matching_loss(feature_a, feature_b):

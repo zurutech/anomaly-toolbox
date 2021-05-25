@@ -88,7 +88,6 @@ class AnoGAN(Trainer):
         epochs: int,
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
-        steps_per_epoch: Optional[int] = None,
     ):
         for epoch in range(epochs):
             training_data, training_reconstructions = [], []
@@ -98,25 +97,11 @@ class AnoGAN(Trainer):
                     batch, batch_size=batch_size, training=True
                 )
 
-                # DEBUG
-                tf.print("DEBUG atfer a step")
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
                 self.epoch_g_loss_avg.update_state(g_loss)
                 step = self.optimizer_d.iterations.numpy()
                 learning_rate = self.optimizer_g.learning_rate.numpy()
-                tf.print("DEBUG atfer a metric update")
-
-                # DEBUG
-                tf.print(epoch)
-                tf.print(step)
-                tf.print(learning_rate)
-                tf.print(d_loss.shape)
-                tf.print(g_loss.shape)
-                tf.print(x.shape)
-                tf.print(x_hat.shape)
-                tf.print(self.epoch_g_loss_avg.result())
-                tf.print(self.epoch_d_loss_avg.result())
 
                 # Save the input images and their reconstructions for later use
                 training_data.append(x)
@@ -125,7 +110,6 @@ class AnoGAN(Trainer):
                 if step % step_log_frequency == 0:
                     with self.summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
-                    tf.print("DEBUG atfer writing learning rate")
 
                     tf.print(
                         "Step {:04d}: d_loss: {:.3f}, g_loss: {:.3f}, lr: {:.5f}".format(
@@ -135,41 +119,34 @@ class AnoGAN(Trainer):
                             learning_rate,
                         )
                     )
-                if steps_per_epoch:
-                    if step % steps_per_epoch == 0:
-                        tf.print("EDN OF EPOCH")
-                        continue
+
             # |--------------------|
             # | Epoch-wise logging |
             # |--------------------|
-            tf.print("DEBUG before epoch log")
-            # self.log(
-            #     input_data=training_data[-1][:batch_size],
-            #     reconstructions=training_reconstructions[-1][:batch_size],
-            #     summary_writer=self.summary_writer,
-            #     step=step,
-            #     epoch=epoch,
-            #     d_loss_metric=self.epoch_d_loss_avg,
-            #     g_loss_metric=self.epoch_g_loss_avg,
-            #     max_images_to_log=batch_size,
-            #     training=True,
-            # )
-            # tf.print("DEBUG atfer epoch log")
+            self.log(
+                input_data=training_data[-1][:batch_size],
+                reconstructions=training_reconstructions[-1][:batch_size],
+                summary_writer=self.summary_writer,
+                step=step,
+                epoch=epoch,
+                d_loss_metric=self.epoch_d_loss_avg,
+                g_loss_metric=self.epoch_g_loss_avg,
+                max_images_to_log=batch_size,
+                training=True,
+            )
 
             # # |-----------------------|
             # # | Perform the test step |
             # # |-----------------------|
-            # if test_dataset:
-            #     _, _, _ = self.test_phase(
-            #         test_dataset=test_dataset,
-            #         batch_size=batch_size,
-            #         epoch=epoch,
-            #         step=step,
-            #     )
-            # tf.print("DEBUG atfer test phase")
-            # # Reset metrics or the data will keep accruing becoming an average of ALL the epcohs
+            if test_dataset:
+                _, _ = self.test_phase(
+                    test_dataset=test_dataset,
+                    batch_size=batch_size,
+                    epoch=epoch,
+                    step=step,
+                )
+            # Reset metrics or the data will keep accruing becoming an average of ALL the epcohs
             self._reset_keras_metrics()
-            tf.print("DEBUG end of epoch")
 
     def test_phase(
         self,
@@ -222,22 +199,9 @@ class AnoGAN(Trainer):
             d_x, x_features = self.discriminator(x, training=training)
             d_x_hat, x_hat_features = self.discriminator(x_hat, training=training)
 
-            tf.print("---------------------")
-            tf.print("Debug all shape")
-            tf.print(x.shape)
-            tf.print(x_hat.shape)
-            tf.print(d_x.shape)
-            tf.print(d_x_hat.shape)
-            tf.print(x_features.shape)
-            tf.print(x_hat_features.shape)
-
             # Losses
-            tf.print("DEBUG before losses")
             d_loss = adversarial_loss(d_x, d_x_hat)
             g_loss = feature_matching_loss(x_hat_features, x_features)
-            tf.print(d_loss.shape)
-            tf.print(g_loss.shape)
-            tf.print("DEBUG after losses")
 
         if training:
             d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
@@ -280,7 +244,6 @@ class AnoGAN(Trainer):
             training: True for logging training, False for logging test epoch results
 
         """
-        tf.print("DEBUG inside log")
         with summary_writer.as_default():
             hp.hparams(self.hps)
             # |-----------------|
@@ -377,7 +340,7 @@ class AnoGANMNIST(AnoGAN):
         self.generator = AnoGANMNISTAssembler.assemble_generator(
             input_dimension=hps["latent_vector_size"]
         )
-        # self._validate_models(self.input_dimension, hps["latent_vector_size"])
+        self._validate_models(self.input_dimension, hps["latent_vector_size"])
 
     def train_mnist(
         self,
@@ -403,11 +366,11 @@ class AnoGANMNIST(AnoGAN):
             self.ds_test,
             self.ds_test_anomalous,
         ) = ds_builder.assemble_datasets(
-            anomalous_label=anomalous_label, batch_size=batch_size, cache=False
+            anomalous_label=anomalous_label, batch_size=batch_size, drop_remainder=True
         )
         self.train(
             dataset=self.ds_train,
             batch_size=batch_size,
             epochs=epochs,
-            # test_dataset=self.ds_test,
+            test_dataset=self.ds_test,
         )
