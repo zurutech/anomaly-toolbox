@@ -23,6 +23,7 @@ class MNISTDataset:
         new_size: Tuple[int, int] = (28, 28),
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
+        drop_remainder: bool = True,
     ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
         """Assemble train and test datasets."""
         pipeline = partial(
@@ -31,6 +32,7 @@ class MNISTDataset:
             batch_size=batch_size,
             shuffle_buffer_size=shuffle_buffer_size,
             cache=cache,
+            drop_remainder=drop_remainder,
         )
         pipeline_train = partial(pipeline, is_training=True)
         pipeline_test = partial(pipeline, is_training=False)
@@ -71,12 +73,13 @@ class MNISTDataset:
         cache: bool,
         shuffle_buffer_size: int,
         is_training: bool = True,
+        drop_remainder: bool = True,
     ) -> tf.data.Dataset:
         dataset = dataset.map(partial(MNISTDataset.resize, size=size))
         dataset = dataset.map(MNISTDataset.scale)
         if is_training:
             dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
-        dataset = dataset.batch(batch_size)
+        dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)
         if cache:
             dataset = dataset.cache()
         return dataset
