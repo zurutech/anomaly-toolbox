@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Top-level package for Anomaly Toolbox."""
 
 __author__ = """Zuru Tech HK Limited, All rights reserved."""

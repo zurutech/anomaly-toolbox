@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 """Console script for anomaly_toolbox."""
 
 import sys
@@ -7,8 +5,8 @@ from datetime import datetime
 
 import click
 
-from anomaly_toolbox.experiments import AVAILABLE_EXPERIMENTS
 from anomaly_toolbox.benchmarks import AVAILABLE_BENCHMARKS
+from anomaly_toolbox.experiments import AVAILABLE_EXPERIMENTS
 
 # TODO: move to cli arg
 TEST_RUN = (
