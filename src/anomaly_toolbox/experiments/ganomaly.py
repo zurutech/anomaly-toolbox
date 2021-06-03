@@ -18,7 +18,7 @@ class GANomalyExperimentMNIST(Experiment):
     # --- HPS ---
     hps: List[hp.HParam] = [
         hp.HParam("anomalous_label", hp.Discrete([2])),
-        hp.HParam("epoch", hp.Discrete([1, 5, 10, 15])),
+        hp.HParam("epoch", hp.Discrete([5, 10, 15])),
         hp.HParam("batch_size", hp.Discrete([32])),
         # hp.HParam("optimizer", hp.Discrete(["adam"])),  # NOTE: Currently unused
         hp.HParam("learning_rate", hp.Discrete([0.002, 0.001, 0.0005])),
@@ -29,9 +29,10 @@ class GANomalyExperimentMNIST(Experiment):
         hp.HParam("latent_vector_size", hp.Discrete([100])),
     ]
     metrics: List[hp.Metric] = [
-        hp.Metric("test_epoch_d_loss", display_name="Discriminator Loss"),
-        hp.Metric("test_epoch_g_loss", display_name="Generator Loss"),
-        hp.Metric("test_epoch_e_loss", display_name="Encoder Loss"),
+        hp.Metric("test_epoch_d_loss", display_name="Test Discriminator Loss"),
+        hp.Metric("test_epoch_g_loss", display_name="Test Generator Loss"),
+        hp.Metric("test_epoch_e_loss", display_name="Test Encoder Loss"),
+        hp.Metric("test_auc", display_name="Test AUC"),
     ]
 
     def experiment_run(self, hps: Dict, log_dir: str):
@@ -51,6 +52,8 @@ class GANomalyExperimentMNIST(Experiment):
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],
         )
+        trainer.discriminator.save(log_dir + "/discriminator")
+        trainer.generator.save(log_dir + "/generator")
 
     def run(self):
         """Run the Experiment."""
