@@ -1,13 +1,13 @@
 from sys import path
 from typing import Optional
 
+import numpy as np
 import tensorflow as tf
 
-from anomaly_toolbox.datasets import MNISTDataset
+from anomaly_toolbox.benchmarks.ganomaly import compute_prc
+from anomaly_toolbox.datasets import MNIST
 from anomaly_toolbox.experiments import GANomalyExperimentMNIST
 from anomaly_toolbox.predictors import GANomalyPredictor
-from anomaly_toolbox.benchmarks.ganomaly import compute_prc
-import numpy as np
 
 __ALL__ = ["GANomalyMNISTBenchmark"]
 
@@ -33,7 +33,7 @@ class GANomalyMNISTBenchmark:
         if not batch_size:
             batch_size = 32
 
-        ds_builder = MNISTDataset()
+        ds_builder = MNIST()
         datasets = ds_builder.assemble_datasets(
             anomalous_label=anomalous_label, batch_size=batch_size, new_size=(32, 32)
         )

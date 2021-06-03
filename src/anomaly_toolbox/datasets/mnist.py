@@ -1,15 +1,17 @@
+"""MNIST dataset, splitted to be used for anomaly detection."""
+
 from functools import partial
 from typing import Tuple
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
-from tensorflow._api.v2 import data
-from tensorflow.python.ops.image_ops_impl import ResizeMethod, resize_nearest_neighbor
 
 
-class MNISTDataset:
+class MNIST:
+    """MNIST dataset, splitted to be used for anomaly detection."""
+
     def __init__(self):
-        (self.ds_train, self.ds_test), self.ds_info = tfds.load(
+        (self._ds_train, self._ds_test), self.ds_info = tfds.load(
             "mnist",
             split=["train", "test"],
             as_supervised=True,
@@ -25,9 +27,15 @@ class MNISTDataset:
         cache: bool = True,
         drop_remainder: bool = True,
     ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
-        """Assemble train and test datasets."""
+        """Assemble train and test datasets.
+        Returns:
+            - ds_train_normal: train dataset with normal data
+            - ds_train_anomalous: train dataset with anomalous data
+            - ds_test_normal: test dataset with normal data
+            - ds_test_anomalous: test dataset with anomalous data
+        """
         pipeline = partial(
-            MNISTDataset.pipeline,
+            MNIST.pipeline,
             size=new_size,
             batch_size=batch_size,
             shuffle_buffer_size=shuffle_buffer_size,
@@ -38,31 +46,18 @@ class MNISTDataset:
         pipeline_test = partial(pipeline, is_training=False)
         is_anomalous = lambda _, label: label == anomalous_label
         is_normal = lambda _, label: label != anomalous_label
-        # --- Train Data ---
-        ds_train_anomalous = self.ds_train.filter(is_anomalous).apply(pipeline_train)
-        ds_train_normal = self.ds_train.filter(is_normal).apply(pipeline_train)
-        # --- Test Data ---
-        ds_test_anomalous = self.ds_test.filter(is_anomalous).apply(pipeline_test)
-        ds_test_normal = self.ds_test.filter(is_normal).apply(pipeline_test)
-        return ds_train_normal, ds_train_anomalous, ds_test_normal, ds_test_anomalous
 
-    @staticmethod
-    def scale(image, label):
-        """Normalize images: `uint8` -> `float32`."""
-        return tf.cast(image, tf.float32) / 255.0, label
-
-    @staticmethod
-    def resize(image, label, size):
-        """Resize the data using Nearest Neighbor."""
+        # train data
+        ds_train_anomalous = self._ds_train.filter(is_anomalous).apply(pipeline_train)
+        ds_train_normal = self._ds_train.filter(is_normal).apply(pipeline_train)
+        # test data
+        ds_test_anomalous = self._ds_test.filter(is_anomalous).apply(pipeline_test)
+        ds_test_normal = self._ds_test.filter(is_normal).apply(pipeline_test)
         return (
-            tf.image.resize(
-                image,
-                size=size,
-                method=tf.image.ResizeMethod.NEAREST_NEIGHBOR,
-            )
-            if size != (28, 28)
-            else image,
-            label,
+            ds_train_normal,
+            ds_train_anomalous,
+            ds_test_normal,
+            ds_test_anomalous,
         )
 
     @staticmethod
@@ -75,8 +70,20 @@ class MNISTDataset:
         is_training: bool = True,
         drop_remainder: bool = True,
     ) -> tf.data.Dataset:
-        dataset = dataset.map(partial(MNISTDataset.resize, size=size))
-        dataset = dataset.map(MNISTDataset.scale)
+        """Given a dataset, it configures it applying the chain of
+        map, filter, shuffle and all the needed mathods of the tf.data.Dataset.
+        """
+        dataset = dataset.map(
+            lambda image, label: (
+                tf.image.resize(
+                    image, size=size, method=tf.image.ResizeMethod.NEAREST_NEIGHBOR
+                ),
+                label,
+            )
+        )
+        dataset = dataset.map(
+            lambda image, label: (tf.cast(image, tf.float32) / 255.0, label)
+        )
         if is_training:
             dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
         dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)

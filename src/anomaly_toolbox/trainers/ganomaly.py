@@ -6,7 +6,7 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.datasets import MNISTDataset
+from anomaly_toolbox.datasets import MNIST
 from anomaly_toolbox.losses import ganomaly as losses
 from anomaly_toolbox.models import (
     GANomalyAssembler,
@@ -365,7 +365,7 @@ class GANomaly(Trainer):
             contextual_loss_weight: weight for the contextual loss (reconstruction loss)
             enc_loss_weight: weight for the encoder loss
         """
-        ds_builder = MNISTDataset()
+        ds_builder = MNIST()
         (
             self.ds_train,
             self.ds_train_anomalous,
