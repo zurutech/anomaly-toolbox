@@ -22,7 +22,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..", "src")))
 
-import anomaly_toolbox # pylint: disable=wrong-import-position
+import anomaly_toolbox  # pylint: disable=wrong-import-position
 
 # -- General configuration ---------------------------------------------
 
@@ -82,11 +82,11 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = u"Anomaly Toolbox"
+project = "Anomaly Toolbox"
 copyright = (  # pylint: disable=redefined-builtin
-    u"2021, Zuru Tech HK Limited, All rights reserved."
+    "2021, Zuru Tech HK Limited, All rights reserved."
 )
-author = u"Michele "Ubik" De Simoni"
+author = "Zuru Tech ML Team"
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
@@ -170,9 +170,13 @@ htmlhelp_basename = "anomaly_toolboxdoc"
 # (source start file, target name, title, author, documentclass
 # [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "anomaly_toolbox.tex",
-     u"Anomaly Toolbox Documentation",
-     u"Zuru Tech HK Limited, All rights reserved.", "manual"),
+    (
+        master_doc,
+        "anomaly_toolbox.tex",
+        "Anomaly Toolbox Documentation",
+        "Zuru Tech HK Limited, All rights reserved.",
+        "manual",
+    ),
 ]
 
 # -- Options for manual page output ------------------------------------
@@ -180,9 +184,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, "anomaly_toolbox",
-     u"Anomaly Toolbox Documentation",
-     [author], 1)
+    (master_doc, "anomaly_toolbox", "Anomaly Toolbox Documentation", [author], 1)
 ]
 
 
@@ -192,12 +194,13 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, "anomaly_toolbox",
-     u"Anomaly Toolbox Documentation",
-     author,
-     "anomaly_toolbox",
-     "One line description of project.",
-     "Miscellaneous"),
+    (
+        master_doc,
+        "anomaly_toolbox",
+        "Anomaly Toolbox Documentation",
+        author,
+        "anomaly_toolbox",
+    ),
 ]
 
 # -- Options for Epub output -------------------------------------------------
