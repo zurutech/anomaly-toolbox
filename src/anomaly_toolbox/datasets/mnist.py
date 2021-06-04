@@ -6,8 +6,10 @@ from typing import Tuple
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
+from .dataset import AnomalousDataset
 
-class MNIST:
+
+class MNIST(AnomalousDataset):
     """MNIST dataset, splitted to be used for anomaly detection."""
 
     def __init__(self):
