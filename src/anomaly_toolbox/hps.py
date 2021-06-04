@@ -17,14 +17,13 @@ def grid_search(
     Perform a grid search over the values of the hyperparameters passed.
 
     Given a set of hyperparameters, this function firstly creates their combinatorial product
-    and then iterates over the result each time callin the given experiment_func.
+    and then iterates over the result each time calling the given experiment_func.
 
     Args:
         experiment_func: Callable, usually coding a single run of the experiment
         hps: List of hyperparameters, encoded as hp.HParam
         metrics: List of metrics to log, encoded as hp.Metric
-        logd_dir: Log directory where the tf.summary.SummaryWriter will save data
-
+        log_dir: Log directory where the tf.summary.SummaryWriter will save data
     """
     # Log the hps
     with tf.summary.create_file_writer(log_dir).as_default():

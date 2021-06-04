@@ -24,11 +24,6 @@ def main():
             "Programming Language :: Python :: 3.7",
         ],
         description="Anomaly Toolbox Powered by GANs",
-        entry_points={
-            "console_scripts": [
-                "anomaly_toolbox=anomaly_toolbox.cli:main",
-            ],
-        },
         install_requires=requirements,
         python_requires=">=3.8",
         license="MIT license",
@@ -37,6 +32,7 @@ def main():
         include_package_data=True,
         keywords="anomaly_toolbox",
         name="anomaly_toolbox",
+        scripts=["bin/anomaly-box.py"],  # TODO: rename and remove .py
         package_dir={"": "src"},
         packages=find_packages(where="src"),
         url="https://github.com/zurutech/anomaly-toolbox",

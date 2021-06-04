@@ -1,5 +1,6 @@
 """All GANomaly experiments."""
 
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import tensorflow as tf
@@ -35,9 +36,9 @@ class GANomalyExperimentMNIST(Experiment):
         hp.Metric("test_auc", display_name="Test AUC"),
     ]
 
-    def experiment_run(self, hps: Dict, log_dir: str):
+    def experiment_run(self, hps: Dict, log_dir: Path):
         """Perform a single run of the model."""
-        summary_writer = tf.summary.create_file_writer(log_dir)
+        summary_writer = tf.summary.create_file_writer(str(log_dir))
         trainer = GANomaly(
             input_dimension=self.input_dimension,
             filters=self.filters,
@@ -61,5 +62,5 @@ class GANomalyExperimentMNIST(Experiment):
             self.experiment_run,
             hps=self.hps,
             metrics=self.metrics,
-            log_dir=self.log_dir,
+            log_dir=str(self.log_dir),
         )

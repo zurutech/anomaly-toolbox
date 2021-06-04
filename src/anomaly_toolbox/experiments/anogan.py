@@ -1,12 +1,13 @@
 """All AnoGAN experiments."""
 
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.hps import grid_search
 from anomaly_toolbox.experiments.interface import Experiment
+from anomaly_toolbox.hps import grid_search
 from anomaly_toolbox.trainers import AnoGAN, AnoGANMNIST
 
 __ALL__ = ["AnoGANExperimentMNIST"]
@@ -28,9 +29,9 @@ class AnoGANExperimentMNIST(Experiment):
         hp.Metric("test_epoch_g_loss", display_name="Generator Loss"),
     ]
 
-    def experiment_run(self, hps: Dict, log_dir: str):
+    def experiment_run(self, hps: Dict, log_dir: Path):
         """Perform a single run of the model."""
-        summary_writer = tf.summary.create_file_writer(log_dir)
+        summary_writer = tf.summary.create_file_writer(str(log_dir))
         trainer = AnoGANMNIST(
             hps=hps,
             summary_writer=summary_writer,
@@ -47,5 +48,5 @@ class AnoGANExperimentMNIST(Experiment):
             self.experiment_run,
             hps=self.hps,
             metrics=self.metrics,
-            log_dir=self.log_dir,
+            log_dir=str(self.log_dir),
         )
