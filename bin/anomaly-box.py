@@ -31,10 +31,8 @@ from anomaly_toolbox.experiments import AVAILABLE_EXPERIMENTS
 )
 def main(chosen_experiment: str, chosen_benchmark: str, test_run: str) -> int:
     """Console script for anomaly_toolbox."""
-
-    log_dir = Path("logs") / "experiments/" / datetime.now().strftime("%Y%m%d-%H%M%S")
-
     if chosen_experiment:
+        log_dir = Path("logs") / "experiments" / chosen_experiment / datetime.now().strftime("%Y%m%d-%H%M%S")
         experiment = AVAILABLE_EXPERIMENTS[chosen_experiment.lower()](log_dir)
         experiment.run()
     elif chosen_benchmark:

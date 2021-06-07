@@ -16,6 +16,7 @@ __ALL__ = ["GANomalyExperimentMNIST"]
 class GANomalyExperimentMNIST(Experiment):
     input_dimension: Tuple[int, int, int] = (32, 32, 1)
     filters: int = 64
+
     # --- HPS ---
     hps: List[hp.HParam] = [
         hp.HParam("anomalous_label", hp.Discrete([2])),
@@ -36,9 +37,9 @@ class GANomalyExperimentMNIST(Experiment):
         hp.Metric("test_auc", display_name="Test AUC"),
     ]
 
-    def experiment_run(self, hps: Dict, log_dir: Path):
+    def experiment_run(self, hps: Dict, log_dir: str):
         """Perform a single run of the model."""
-        summary_writer = tf.summary.create_file_writer(str(log_dir))
+        summary_writer = tf.summary.create_file_writer(log_dir)
         trainer = GANomaly(
             input_dimension=self.input_dimension,
             filters=self.filters,

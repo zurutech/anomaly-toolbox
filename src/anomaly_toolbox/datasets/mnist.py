@@ -29,7 +29,9 @@ class MNIST(AnomalousDataset):
         cache: bool = True,
         drop_remainder: bool = True,
     ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
-        """Assemble train and test datasets.
+        """
+        Assemble train and test datasets.
+
         Returns:
             - ds_train_normal: train dataset with normal data
             - ds_train_anomalous: train dataset with anomalous data

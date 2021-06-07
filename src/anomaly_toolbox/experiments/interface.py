@@ -16,7 +16,7 @@ class Experiment(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def experiment_run(self, hps: Dict, log_dir: Path):
+    def experiment_run(self, hps: Dict, log_dir: str):
         pass
 
     @abc.abstractmethod

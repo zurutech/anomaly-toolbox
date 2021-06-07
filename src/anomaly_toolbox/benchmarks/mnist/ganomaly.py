@@ -1,10 +1,11 @@
 from sys import path
-from typing import Optional
+from typing import Optional, List
 
 import numpy as np
+from numpy.lib.function_base import append
 import tensorflow as tf
-
-from anomaly_toolbox.benchmarks.ganomaly import compute_prc
+import tensorflow.keras as keras
+from anomaly_toolbox.benchmarks.metrics import compute_prc
 from anomaly_toolbox.datasets import MNIST
 from anomaly_toolbox.experiments import GANomalyExperimentMNIST
 from anomaly_toolbox.predictors import GANomalyPredictor
@@ -16,6 +17,8 @@ class GANomalyMNISTBenchmark:
     def __init__(self, run_path):
         self.run_path = run_path
         self.predictor = GANomalyPredictor()
+        self.pr_auc_metric = keras.metrics.AUC(curve="PR")
+        self.roc_auc_metric = keras.metrics.AUC()
 
     def load_from_savedmodel(self):
         self.predictor.load_from_savedmodel(
@@ -37,26 +40,36 @@ class GANomalyMNISTBenchmark:
         datasets = ds_builder.assemble_datasets(
             anomalous_label=anomalous_label, batch_size=batch_size, new_size=(32, 32)
         )
-        anomaly_scores, labels = [], []
-        for dataset in datasets[:-2]:
-            _anomaly_scores, _labels = self.predictor.evaluate(dataset)
-            anomaly_scores.extend(_anomaly_scores[0])
-            labels.extend(_labels)
 
-        # make labels binary
-        best_ap = 0
-        aucs = []
+        anomaly_scores: List[tf.Tensor] = []
+        labels: List[tf.Tensor] = []
+        for d in datasets:
+            a, y = self.predictor.evaluate(d)
+            anomaly_scores.append(a)
+            labels.append(y)
 
-        for label in range(10):
+        anomaly_scores: np.ndarray = tf.concat(anomaly_scores, axis=0).numpy()
+        labels: np.ndarray = tf.concat(labels, axis=0).numpy()
 
-            positive_mask = labels == anomalous_label
-            negative_mask = labels != anomalous_label
-            labels[positive_mask] = 1
-            labels[negative_mask] = 0
+        # Binarize labels
+        positive_mask = labels == anomalous_label
+        negative_mask = labels != anomalous_label
+        labels[negative_mask] = 1
+        labels[positive_mask] = 0
 
-            prc, _ = compute_prc(anomaly_scores, np.array(labels), f"{anomalous_label}")
-            aucs.append(prc)
-
+        self.pr_auc_metric.update_state(labels, anomaly_scores)
+        self.roc_auc_metric.update_state(labels, anomaly_scores)
+        print(f"Anomaly scores Keras-AUC-PR is: {self.pr_auc_metric.result().numpy()}")
         print(
-            f"Mean AUC: {np.mean(np.array(aucs))} || Best Average Precision: {best_ap}"
+            f"Anomaly scores Keras-AUC-ROC is: {self.roc_auc_metric.result().numpy()}"
         )
+
+        # SciKitLearn computation
+        pr_auc, average_precision = compute_prc(
+            labels,
+            anomaly_scores,
+            file_name=self.run_path + "/" + "benchmark_mnist_pr_auc.png",
+            plot=True,
+        )
+        print(f"Anomaly Scores ScikitLearn AUC-PR is {pr_auc}")
+        print(f"Anomaly Scores ScikitLearn Average Precision is {average_precision}")
