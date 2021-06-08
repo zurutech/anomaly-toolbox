@@ -49,8 +49,8 @@ class GANomalyPredictor:
 
         return a_score, y
 
-    @tf.function
     @staticmethod
+    @tf.function
     def predict(generator: keras.Model, x, return_score_only: bool = True):
         # x: [batch, height, width, channels]
 
