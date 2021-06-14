@@ -20,7 +20,7 @@ class AnoGANAssembler:
 
         Args:
             input_dimension: Dimension of the input latent (noise) vector.
-            output: Desired dimension of the output vector.
+            output_dimension: Desired dimension of the output vector.
             filters: Filters of the first transposed convolution.
 
         """

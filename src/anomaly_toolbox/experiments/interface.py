@@ -7,11 +7,13 @@ class Experiment(abc.ABC):
     def __init__(self, log_dir: Path) -> None:
         self.log_dir = log_dir
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def hps(self):
         pass
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
     def metrics(self):
         pass
 

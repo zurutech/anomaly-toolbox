@@ -6,15 +6,14 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.datasets import MNIST
 from anomaly_toolbox.losses import ganomaly as losses
 from anomaly_toolbox.models import (
     GANomalyAssembler,
     GANomalyDiscriminator,
     GANomalyGenerator,
 )
-
-from .interface import Trainer
+from anomaly_toolbox.trainers.trainer import Trainer
+from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 
 __ALL__ = ["GANomaly"]
 
@@ -24,6 +23,7 @@ class GANomaly(Trainer):
 
     def __init__(
         self,
+        dataset: AnomalyDetectionDataset,
         input_dimension: Tuple[int, int, int],
         filters: int,
         hps: Dict,
@@ -31,13 +31,14 @@ class GANomaly(Trainer):
     ):
         """Initialize GANomaly Networks."""
         print("Initializing GANomaly Trainer")
-        super().__init__(hps=hps, summary_writer=summary_writer)
+        super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
+
         # |--------|
         # | MODELS |
         # |--------|
         self.discriminator = GANomalyDiscriminator(input_dimension, filters)
         self.generator = GANomalyGenerator(
-            input_dimension, filters, self.hps["latent_vector_size"]
+            input_dimension, filters, self._hps["latent_vector_size"]
         )
         fake_batch_size = (1,) + input_dimension
         self.discriminator(tf.zeros(fake_batch_size))
@@ -87,7 +88,6 @@ class GANomaly(Trainer):
     def train(
         self,
         dataset: tf.data.Dataset,
-        batch_size: int,
         epoch: int,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
@@ -97,7 +97,10 @@ class GANomaly(Trainer):
     ):
         for epoch in range(epoch):
             training_data, training_reconstructions = [], []
+            batch_size = None
             for batch in dataset:
+                if not batch_size:
+                    batch_size = tf.shape(batch[0])[0]
                 # Perform the train step
                 x, x_hat, d_loss, g_loss, e_loss = self.step_fn(
                     batch,
@@ -120,7 +123,7 @@ class GANomaly(Trainer):
                 training_reconstructions.append(x_hat)
 
                 if step % step_log_frequency == 0:
-                    with self.summary_writer.as_default():
+                    with self._summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
 
                     tf.print(
@@ -138,7 +141,7 @@ class GANomaly(Trainer):
             self.log(
                 input_data=training_data[-1][:batch_size],
                 reconstructions=training_reconstructions[-1][:batch_size],
-                summary_writer=self.summary_writer,
+                summary_writer=self._summary_writer,
                 step=step,
                 epoch=epoch,
                 d_loss_metric=self.epoch_d_loss_avg,
@@ -157,7 +160,6 @@ class GANomaly(Trainer):
                     adversarial_loss_weight=adversarial_loss_weight,
                     contextual_loss_weight=contextual_loss_weight,
                     enc_loss_weight=enc_loss_weight,
-                    batch_size=batch_size,
                     epoch=epoch,
                     step=step,
                 )
@@ -170,7 +172,6 @@ class GANomaly(Trainer):
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
-        batch_size: int,
         step: int,
         epoch: int,
         log: bool = True,
@@ -178,6 +179,7 @@ class GANomaly(Trainer):
         """Perform the test pass on a given test_dataset."""
         test_iterator = iter(test_dataset)
         testing_data, testing_reconstructions = [], []
+        batch_size = None
         for input_data in test_iterator:
             (test_x, test_x_hat, test_d_loss, test_g_loss, test_e_loss) = self.step_fn(
                 input_data,
@@ -186,6 +188,8 @@ class GANomaly(Trainer):
                 enc_loss_weight,
                 training=False,
             )
+            if not batch_size:
+                batch_size = tf.shape(test_x)[0]
             testing_data.append(test_x)
             testing_reconstructions.append(test_x_hat)
             # Update the losses metrics
@@ -196,7 +200,7 @@ class GANomaly(Trainer):
             self.log(
                 input_data=testing_data[0][:batch_size],
                 reconstructions=testing_reconstructions[0][:batch_size],
-                summary_writer=self.summary_writer,
+                summary_writer=self._summary_writer,
                 step=step,
                 epoch=epoch,
                 d_loss_metric=self.test_d_loss_avg,
@@ -294,7 +298,7 @@ class GANomaly(Trainer):
 
         """
         with summary_writer.as_default():
-            hp.hparams(self.hps)
+            hp.hparams(self._hps)
             # |-----------------|
             # | Logging scalars |
             # |-----------------|
@@ -347,9 +351,7 @@ class GANomaly(Trainer):
 
     def train_mnist(
         self,
-        batch_size: int,
         epoch: int,
-        anomalous_label: int,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
@@ -358,28 +360,16 @@ class GANomaly(Trainer):
         Train GANomaly on MNIST dataset with one abnormal class.
 
         Args:
-            batch_size:
-            epoch:
-            anomalous_label:
-            adversarial_loss_weight: weight for the adversarial loss
-            contextual_loss_weight: weight for the contextual loss (reconstruction loss)
-            enc_loss_weight: weight for the encoder loss
+            epoch: Number of epochs.
+            adversarial_loss_weight: weight for the adversarial loss.
+            contextual_loss_weight: weight for the contextual loss (reconstruction loss).
+            enc_loss_weight: weight for the encoder loss.
         """
-        ds_builder = MNIST()
-        (
-            self.ds_train,
-            self.ds_train_anomalous,
-            self.ds_test,
-            self.ds_test_anomalous,
-        ) = ds_builder.assemble_datasets(
-            anomalous_label=anomalous_label, batch_size=batch_size, new_size=(32, 32)
-        )
         self.train(
-            dataset=self.ds_train,
-            batch_size=batch_size,
+            dataset=self._dataset.train_normal,
             epoch=epoch,
             adversarial_loss_weight=adversarial_loss_weight,
             contextual_loss_weight=contextual_loss_weight,
             enc_loss_weight=enc_loss_weight,
-            test_dataset=self.ds_test,
+            test_dataset=self._dataset.test_normal,
         )

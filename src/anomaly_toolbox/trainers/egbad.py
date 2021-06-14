@@ -6,10 +6,10 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.datasets import MNIST
 from anomaly_toolbox.losses import egbad as losses
 from anomaly_toolbox.models import EGBADBiGANAssembler
-from anomaly_toolbox.trainers.interface import Trainer
+from anomaly_toolbox.trainers.trainer import Trainer
+from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 
 __ALL__ = ["EGBAD"]
 
@@ -19,6 +19,7 @@ class EGBAD(Trainer):
 
     def __init__(
         self,
+        dataset: AnomalyDetectionDataset,
         input_dimension: Tuple[int, int, int],
         filters: int,
         hps: Dict,
@@ -26,26 +27,27 @@ class EGBAD(Trainer):
     ):
         """Initialize EGBAD-BiGAN Networks."""
         print("Initializing EGBAD-BiGAN Trainer")
-        super().__init__(hps=hps, summary_writer=summary_writer)
+        super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
+
         # |--------|
         # | MODELS |
         # |--------|
         self.discriminator = EGBADBiGANAssembler.assemble_discriminator(
-            input_dimension, filters, self.hps["latent_vector_size"]
+            input_dimension, filters, self._hps["latent_vector_size"]
         )
         self.generator = EGBADBiGANAssembler.assemble_decoder(
-            input_dimension=self.hps["latent_vector_size"],
+            input_dimension=self._hps["latent_vector_size"],
             output_dimension=input_dimension,
             filters=filters,
         )
         self.encoder = EGBADBiGANAssembler.assemble_encoder(
             input_dimension=input_dimension,
             filters=filters,
-            latent_space_dimension=self.hps["latent_vector_size"],
+            latent_space_dimension=self._hps["latent_vector_size"],
         )
 
         fake_batch_size = (1,) + input_dimension
-        fake_latent_vector = (1,) + (1, 1, self.hps["latent_vector_size"])
+        fake_latent_vector = (1,) + (1, 1, self._hps["latent_vector_size"])
         self.generator(tf.zeros(fake_latent_vector))
         self.encoder(tf.zeros(fake_batch_size))
         self.discriminator([tf.zeros(fake_batch_size), tf.zeros(fake_latent_vector)])
@@ -94,17 +96,19 @@ class EGBAD(Trainer):
     def train(
         self,
         dataset: tf.data.Dataset,
-        batch_size: int,
         epoch: int,
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
     ):
         for epoch in range(epoch):
             training_data, training_reconstructions, training_generated = [], [], []
+            batch_size = None
             for batch in dataset:
+                if not batch_size:
+                    batch_size = tf.shape(batch[0])[0]
                 # Perform the train step
                 x, x_hat, xz_hat, d_loss, g_loss, e_loss = self.step_fn(
-                    batch, batch_size=batch_size, training=True
+                    batch, training=True
                 )
 
                 # Update the losses metrics
@@ -115,13 +119,12 @@ class EGBAD(Trainer):
                 learning_rate = self.optimizer_g.learning_rate.numpy()
 
                 # Save the input images and their reconstructions for later use
-
                 training_data.append(x)
                 training_generated.append(x_hat)
                 training_reconstructions.append(xz_hat)
 
                 if step % step_log_frequency == 0:
-                    with self.summary_writer.as_default():
+                    with self._summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
 
                     tf.print(
@@ -140,7 +143,7 @@ class EGBAD(Trainer):
                 input_data=training_data[-1][:batch_size],
                 reconstructions=training_reconstructions[-1][:batch_size],
                 generated=training_generated[-1][:batch_size],
-                summary_writer=self.summary_writer,
+                summary_writer=self._summary_writer,
                 step=step,
                 epoch=epoch,
                 d_loss_metric=self.epoch_d_loss_avg,
@@ -156,7 +159,6 @@ class EGBAD(Trainer):
             if test_dataset:
                 _, _, _ = self.test_phase(
                     test_dataset=test_dataset,
-                    batch_size=batch_size,
                     epoch=epoch,
                     step=step,
                 )
@@ -166,7 +168,6 @@ class EGBAD(Trainer):
     def test_phase(
         self,
         test_dataset,
-        batch_size: int,
         step: int,
         epoch: int,
         log: bool = True,
@@ -174,6 +175,7 @@ class EGBAD(Trainer):
         """Perform the test pass on a given test_dataset."""
         test_iterator = iter(test_dataset)
         testing_data, testing_reconstructions, testing_generated = [], [], []
+        batch_size = None
         for input_data in test_iterator:
             (
                 test_x,
@@ -182,7 +184,9 @@ class EGBAD(Trainer):
                 test_d_loss,
                 test_g_loss,
                 test_e_loss,
-            ) = self.step_fn(input_data, batch_size=batch_size, training=False)
+            ) = self.step_fn(input_data, training=False)
+            if not batch_size:
+                batch_size = tf.shape(test_x)[0]
             testing_data.append(test_x)
             testing_generated.append(test_x_hat)
             testing_reconstructions.append(test_xz_hat)
@@ -191,11 +195,12 @@ class EGBAD(Trainer):
             self.test_g_loss_avg.update_state(test_g_loss)
             self.test_e_loss_avg.update_state(test_e_loss)
         if log:
+            batch_size = batch_size.numpy()
             self.log(
                 input_data=testing_data[0][:batch_size],
                 reconstructions=testing_reconstructions[0][:batch_size],
                 generated=testing_generated[0][:batch_size],
-                summary_writer=self.summary_writer,
+                summary_writer=self._summary_writer,
                 step=step,
                 epoch=epoch,
                 d_loss_metric=self.test_d_loss_avg,
@@ -214,12 +219,12 @@ class EGBAD(Trainer):
     def step_fn(
         self,
         inputs,
-        batch_size,
         training: bool = True,
     ):
         """Single training step."""
-        noise = tf.random.normal((batch_size, 1, 1, self.hps["latent_vector_size"]))
         x, y = inputs
+        batch_size = tf.shape(x)[0]
+        noise = tf.random.normal((batch_size, 1, 1, self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
             # Reconstruction
             x_hat = self.generator(noise, training=training)
@@ -294,7 +299,7 @@ class EGBAD(Trainer):
 
         """
         with summary_writer.as_default():
-            hp.hparams(self.hps)
+            hp.hparams(self._hps)
             # |-----------------|
             # | Logging scalars |
             # |-----------------|
@@ -345,7 +350,6 @@ class EGBAD(Trainer):
                 e_loss_metric.result(),
             )
         )
-        print("--------------------------------")
 
     # | ----------------- |
     # | Trainer functions |
@@ -353,36 +357,17 @@ class EGBAD(Trainer):
 
     def train_mnist(
         self,
-        batch_size: int,
         epoch: int,
-        anomalous_label: int,
     ) -> None:
         """
-        Train GANomaly on MNIST dataset with one abnormal class.
+        Train EGBAD on MNIST dataset with one abnormal class.
 
         Args:
-            batch_size:
-            epoch:
-            anomalous_label:
-            adversarial_loss_weight: weight for the adversarial loss
-            contextual_loss_weight: weight for the contextual loss (reconstruction loss)
-            enc_loss_weight: weight for the encoder loss
+            epoch: Number of epochs.
         """
-        ds_builder = MNIST()
-        (
-            self.ds_train,
-            self.ds_train_anomalous,
-            self.ds_test,
-            self.ds_test_anomalous,
-        ) = ds_builder.assemble_datasets(
-            anomalous_label=anomalous_label,
-            batch_size=batch_size,
-            new_size=(32, 32),
-            drop_remainder=True,
-        )
+
         self.train(
-            dataset=self.ds_train,
-            batch_size=batch_size,
+            dataset=self._dataset.train_normal,
             epoch=epoch,
-            test_dataset=self.ds_test,
+            test_dataset=self._dataset.test_normal,
         )

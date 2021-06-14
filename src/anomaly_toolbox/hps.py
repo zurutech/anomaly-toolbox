@@ -26,7 +26,7 @@ def grid_search(
         log_dir: Log directory where the tf.summary.SummaryWriter will save data
     """
     # Log the hps
-    with tf.summary.create_file_writer(log_dir).as_default():
+    with tf.summary.create_file_writer(str(log_dir)).as_default():
         hp.hparams_config(hparams=hps, metrics=metrics)
 
     # Build all combinations of the HPS values
@@ -48,6 +48,6 @@ def grid_search(
         print(hps_run)
         experiment_func(
             hps_run,
-            log_dir + "/" + run_name,
+            str(log_dir) + "/" + run_name,
         )
         session_num += 1

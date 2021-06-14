@@ -1,18 +1,19 @@
 """MNIST dataset, splitted to be used for anomaly detection."""
 
 from functools import partial
-from typing import Tuple
+from typing import Tuple, Optional
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from .dataset import AnomalousDataset
+from .dataset import AnomalyDetectionDataset
 
 
-class MNIST(AnomalousDataset):
-    """MNIST dataset, splitted to be used for anomaly detection."""
+class MNIST(AnomalyDetectionDataset):
+    """MNIST dataset, split to be used for anomaly detection."""
 
     def __init__(self):
+        super().__init__()
         (self._ds_train, self._ds_test), self.ds_info = tfds.load(
             "mnist",
             split=["train", "test"],
@@ -29,15 +30,7 @@ class MNIST(AnomalousDataset):
         cache: bool = True,
         drop_remainder: bool = True,
     ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
-        """
-        Assemble train and test datasets.
 
-        Returns:
-            - ds_train_normal: train dataset with normal data
-            - ds_train_anomalous: train dataset with anomalous data
-            - ds_test_normal: test dataset with normal data
-            - ds_test_anomalous: test dataset with anomalous data
-        """
         pipeline = partial(
             MNIST.pipeline,
             size=new_size,
@@ -46,22 +39,29 @@ class MNIST(AnomalousDataset):
             cache=cache,
             drop_remainder=drop_remainder,
         )
+
         pipeline_train = partial(pipeline, is_training=True)
         pipeline_test = partial(pipeline, is_training=False)
         is_anomalous = lambda _, label: label == anomalous_label
         is_normal = lambda _, label: label != anomalous_label
 
-        # train data
-        ds_train_anomalous = self._ds_train.filter(is_anomalous).apply(pipeline_train)
-        ds_train_normal = self._ds_train.filter(is_normal).apply(pipeline_train)
-        # test data
-        ds_test_anomalous = self._ds_test.filter(is_anomalous).apply(pipeline_test)
-        ds_test_normal = self._ds_test.filter(is_normal).apply(pipeline_test)
+        # Train-data
+        self._ds_train_anomalous = self._ds_train.filter(is_anomalous).apply(
+            pipeline_train
+        )
+        self._ds_train_normal = self._ds_train.filter(is_normal).apply(pipeline_train)
+
+        # Test-data
+        self._ds_test_anomalous = self._ds_test.filter(is_anomalous).apply(
+            pipeline_test
+        )
+        self._ds_test_normal = self._ds_test.filter(is_normal).apply(pipeline_test)
+
         return (
-            ds_train_normal,
-            ds_train_anomalous,
-            ds_test_normal,
-            ds_test_anomalous,
+            self.train_normal,
+            self.train_anomalous,
+            self.test_normal,
+            self.test_anomalous,
         )
 
     @staticmethod
@@ -74,8 +74,8 @@ class MNIST(AnomalousDataset):
         is_training: bool = True,
         drop_remainder: bool = True,
     ) -> tf.data.Dataset:
-        """Given a dataset, it configures it applying the chain of
-        map, filter, shuffle and all the needed mathods of the tf.data.Dataset.
+        """Given a dataset, configure it applying the chain of
+        map, filter, shuffle and all the needed methods of the tf.data.Dataset.
         """
         dataset = dataset.map(
             lambda image, label: (
