@@ -1,14 +1,15 @@
 """All AnoGAN experiments."""
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.experiments.interface import Experiment
 from anomaly_toolbox.hps import grid_search
-from anomaly_toolbox.trainers import AnoGAN, AnoGANMNIST
+from anomaly_toolbox.trainers import AnoGANMNIST
+from anomaly_toolbox.datasets import MNIST
 
 __ALL__ = ["AnoGANExperimentMNIST"]
 
@@ -32,14 +33,20 @@ class AnoGANExperimentMNIST(Experiment):
     def experiment_run(self, hps: Dict, log_dir: Path):
         """Perform a single run of the model."""
         summary_writer = tf.summary.create_file_writer(str(log_dir))
+
+        mnist_dataset = MNIST()
+        mnist_dataset.assemble_datasets(
+            anomalous_label=hps["anomalous_label"],
+            batch_size=hps["batch_size"],
+            shuffle_buffer_size=hps["shuffle_buffer_size"],
+        )
         trainer = AnoGANMNIST(
+            dataset=mnist_dataset,
             hps=hps,
             summary_writer=summary_writer,
         )
         trainer.train_mnist(
-            batch_size=hps["batch_size"],
             epochs=hps["epochs"],
-            anomalous_label=hps["anomalous_label"],
         )
 
     def run(self):

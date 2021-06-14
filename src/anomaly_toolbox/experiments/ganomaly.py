@@ -9,6 +9,8 @@ from tensorboard.plugins.hparams import api as hp
 from anomaly_toolbox.experiments.interface import Experiment
 from anomaly_toolbox.hps import grid_search
 from anomaly_toolbox.trainers import GANomaly
+from anomaly_toolbox.datasets import MNIST
+
 
 __ALL__ = ["GANomalyExperimentMNIST"]
 
@@ -40,16 +42,23 @@ class GANomalyExperimentMNIST(Experiment):
     def experiment_run(self, hps: Dict, log_dir: str):
         """Perform a single run of the model."""
         summary_writer = tf.summary.create_file_writer(log_dir)
+
+        mnist_dataset = MNIST()
+        mnist_dataset.assemble_datasets(
+            anomalous_label=hps["anomalous_label"],
+            batch_size=hps["batch_size"],
+            new_size=(32, 32),
+            shuffle_buffer_size=hps["shuffle_buffer_size"],
+        )
         trainer = GANomaly(
+            dataset=mnist_dataset,
             input_dimension=self.input_dimension,
             filters=self.filters,
             hps=hps,
             summary_writer=summary_writer,
         )
         trainer.train_mnist(
-            batch_size=hps["batch_size"],
             epoch=hps["epoch"],
-            anomalous_label=hps["anomalous_label"],
             adversarial_loss_weight=hps["adversarial_loss_weight"],
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],

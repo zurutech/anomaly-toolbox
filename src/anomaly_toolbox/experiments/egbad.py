@@ -9,6 +9,8 @@ from tensorboard.plugins.hparams import api as hp
 from anomaly_toolbox.experiments.interface import Experiment
 from anomaly_toolbox.hps import grid_search
 from anomaly_toolbox.trainers import EGBAD
+from anomaly_toolbox.datasets import MNIST
+
 
 __ALL__ = ["EGBADExperimentMNIST"]
 
@@ -35,16 +37,25 @@ class EGBADExperimentMNIST(Experiment):
     def experiment_run(self, hps: Dict, log_dir: Path):
         """Perform a single run of the model."""
         summary_writer = tf.summary.create_file_writer(str(log_dir))
+
+        # Create the dataset
+        mnist_dataset = MNIST()
+        mnist_dataset.assemble_datasets(
+            anomalous_label=hps["anomalous_label"],
+            batch_size=hps["batch_size"],
+            new_size=(32, 32),
+            shuffle_buffer_size=hps["shuffle_buffer_size"],
+        )
+
         trainer = EGBAD(
+            dataset=mnist_dataset,
             input_dimension=self.input_dimension,
             filters=self.filters,
             hps=hps,
             summary_writer=summary_writer,
         )
         trainer.train_mnist(
-            batch_size=hps["batch_size"],
             epoch=hps["epoch"],
-            anomalous_label=hps["anomalous_label"],
         )
 
     def run(self):

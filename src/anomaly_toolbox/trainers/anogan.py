@@ -6,20 +6,20 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.datasets import MNIST
 from anomaly_toolbox.losses import adversarial_loss, feature_matching_loss
 from anomaly_toolbox.models import AnoGANAssembler, AnoGANMNISTAssembler
-
-from .interface import Trainer
+from anomaly_toolbox.trainers.trainer import Trainer
+from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 
 __ALL__ = ["AnoGAN", "AnoGANMNIST"]
 
 
 class AnoGAN(Trainer):
-    """GANomaly Trainer."""
+    """AnoGAN Trainer."""
 
     def __init__(
         self,
+        dataset: AnomalyDetectionDataset,
         input_dimension: Tuple[int, int, int],
         filters: int,
         hps: Dict,
@@ -27,7 +27,8 @@ class AnoGAN(Trainer):
         use_generic_architecture: bool = True,
     ):
         """Initialize AnoGAN Trainer."""
-        super().__init__(hps=hps, summary_writer=summary_writer)
+        super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
+
         # |--------|
         # | MODELS |
         # |--------|
@@ -84,18 +85,18 @@ class AnoGAN(Trainer):
     def train(
         self,
         dataset: tf.data.Dataset,
-        batch_size: int,
         epochs: int,
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
     ):
-        for epoch in range(epochs):
+        for epoch in tf.range(epochs):
             training_data, training_reconstructions = [], []
+            batch_size = None
             for batch in dataset:
+                if not batch_size:
+                    batch_size = tf.shape(batch[0])[0]
                 # Perform the train step
-                x, x_hat, d_loss, g_loss = self.step_fn(
-                    batch, batch_size=batch_size, training=True
-                )
+                x, x_hat, d_loss, g_loss = self.step_fn(batch, training=True)
 
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
@@ -108,7 +109,7 @@ class AnoGAN(Trainer):
                 training_reconstructions.append(x_hat)
 
                 if step % step_log_frequency == 0:
-                    with self.summary_writer.as_default():
+                    with self._summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
 
                     tf.print(
@@ -123,10 +124,11 @@ class AnoGAN(Trainer):
             # |--------------------|
             # | Epoch-wise logging |
             # |--------------------|
+            batch_size = batch_size.numpy()
             self.log(
                 input_data=training_data[-1][:batch_size],
                 reconstructions=training_reconstructions[-1][:batch_size],
-                summary_writer=self.summary_writer,
+                summary_writer=self._summary_writer,
                 step=step,
                 epoch=epoch,
                 d_loss_metric=self.epoch_d_loss_avg,
@@ -141,7 +143,6 @@ class AnoGAN(Trainer):
             if test_dataset:
                 _, _ = self.test_phase(
                     test_dataset=test_dataset,
-                    batch_size=batch_size,
                     epoch=epoch,
                     step=step,
                 )
@@ -151,7 +152,6 @@ class AnoGAN(Trainer):
     def test_phase(
         self,
         test_dataset,
-        batch_size: int,
         step: int,
         epoch: int,
         log: bool = True,
@@ -159,20 +159,24 @@ class AnoGAN(Trainer):
         """Perform the test pass on a given test_dataset."""
         test_iterator = iter(test_dataset)
         testing_data, testing_reconstructions = [], []
+        batch_size = None
         for input_data in test_iterator:
             (test_x, test_x_hat, test_d_loss, test_g_loss) = self.step_fn(
-                input_data, batch_size=batch_size, training=False
+                input_data, training=False
             )
+            if not batch_size:
+                batch_size = tf.shape(test_x)[0]
             testing_data.append(test_x)
             testing_reconstructions.append(test_x_hat)
             # Update the losses metrics
             self.test_d_loss_avg.update_state(test_d_loss)
             self.test_g_loss_avg.update_state(test_g_loss)
         if log:
+            batch_size = batch_size.numpy()
             self.log(
                 input_data=testing_data[0][:batch_size],
                 reconstructions=testing_reconstructions[0][:batch_size],
-                summary_writer=self.summary_writer,
+                summary_writer=self._summary_writer,
                 step=step,
                 epoch=epoch,
                 d_loss_metric=self.test_d_loss_avg,
@@ -186,12 +190,12 @@ class AnoGAN(Trainer):
     def step_fn(
         self,
         inputs,
-        batch_size,
         training: bool = True,
     ):
         """Single training step."""
-        noise = tf.random.normal((batch_size, 1, 1, self.hps["latent_vector_size"]))
         x, y = inputs
+        batch_size = tf.shape(x)[0]
+        noise = tf.random.normal((batch_size, 1, 1, self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
             # Reconstruction
             x_hat = self.generator(noise, training=training)
@@ -233,19 +237,20 @@ class AnoGAN(Trainer):
         Log data (images, losses, learning rate) to TensorBoard.
 
         Args:
-            input_data: Input images
-            reconstructions: Reconstructions
-            summary_writer: TensorFlow SummaryWriter to use for logging
-            step: Current step
-            epoch: Current epoch
-            d_loss_metric: Keras Metric
-            g_loss_metric: Keras Metric
-            max_images_to_log: Maximum amount of images that will be logged
-            training: True for logging training, False for logging test epoch results
+            input_data: Input images.
+            reconstructions: Reconstructions.
+            summary_writer: TensorFlow SummaryWriter to use for logging.
+            step: Current step.
+            epoch: Current epoch.
+            d_loss_metric: Keras Metric.
+            g_loss_metric: Keras Metric.
+            max_images_to_log: Maximum amount of images that will be logged.
+            training: True for logging training, False for logging test epoch results.
 
         """
         with summary_writer.as_default():
-            hp.hparams(self.hps)
+            hp.hparams(self._hps)
+
             # |-----------------|
             # | Logging scalars |
             # |-----------------|
@@ -259,6 +264,7 @@ class AnoGAN(Trainer):
                 g_loss_metric.result(),
                 step=step,
             )
+
             # |----------------|
             # | Logging images |
             # |----------------|
@@ -274,6 +280,7 @@ class AnoGAN(Trainer):
                 max_outputs=max_images_to_log,
                 step=step,
             )
+
         # -----
         tf.print("--------------------------------")
         tf.print(
@@ -286,49 +293,18 @@ class AnoGAN(Trainer):
         )
         tf.print("--------------------------------")
 
-    # | ----------------- |
-    # | Trainer functions |
-    # | ----------------- |
-
-    # def train_mnist(
-    #     self,
-    #     batch_size: int,
-    #     epoch: int,
-    #     anomalous_label: int,
-    # ) -> None:
-    #     """
-    #     Train AnoGAN on MNIST dataset with one abnormal class.
-
-    #     Args:
-    #         batch_size:
-    #         epoch:
-    #         anomalous_label:
-    #         adversarial_loss_weight: weight for the adversarial loss
-    #         contextual_loss_weight: weight for the contextual loss (reconstruction loss)
-    #         enc_loss_weight: weight for the encoder loss
-    #     """
-    #     ds_builder = MNIST()
-    #     (
-    #         self.ds_train,
-    #         self.ds_train_anomalous,
-    #         self.ds_test,
-    #         self.ds_test_anomalous,
-    #     ) = ds_builder.assemble_datasets(
-    #         anomalous_label=anomalous_label, batch_size=batch_size, new_size=(32, 32)
-    #     )
-    #     self.train(
-    #         dataset=self.ds_train,
-    #         batch_size=batch_size,
-    #         epoch=epoch,
-    #         test_dataset=self.ds_test,
-    #     )
-
 
 class AnoGANMNIST(AnoGAN):
     input_dimension: Tuple[int, int, int] = (28, 28, 1)
 
-    def __init__(self, hps: Dict, summary_writer: tf.summary.SummaryWriter):
+    def __init__(
+        self,
+        dataset: AnomalyDetectionDataset,
+        hps: Dict,
+        summary_writer: tf.summary.SummaryWriter,
+    ):
         super().__init__(
+            dataset=dataset,
             use_generic_architecture=False,  # Model Architectures will be manually initialized
             input_dimension=self.input_dimension,  # Unused
             filters=0,  # Unused
@@ -344,33 +320,16 @@ class AnoGANMNIST(AnoGAN):
 
     def train_mnist(
         self,
-        batch_size: int,
         epochs: int,
-        anomalous_label: int,
     ) -> None:
         """
         Train AnoGAN on MNIST dataset with one abnormal class.
 
         Args:
-            batch_size:
-            epochs:
-            anomalous_label:
-            adversarial_loss_weight: weight for the adversarial loss
-            contextual_loss_weight: weight for the contextual loss (reconstruction loss)
-            enc_loss_weight: weight for the encoder loss
+            epochs: Number of epochs.
         """
-        ds_builder = MNIST()
-        (
-            self.ds_train,
-            self.ds_train_anomalous,
-            self.ds_test,
-            self.ds_test_anomalous,
-        ) = ds_builder.assemble_datasets(
-            anomalous_label=anomalous_label, batch_size=batch_size, drop_remainder=True
-        )
         self.train(
-            dataset=self.ds_train,
-            batch_size=batch_size,
+            dataset=self._dataset.train_normal,
             epochs=epochs,
-            test_dataset=self.ds_test,
+            test_dataset=self._dataset.test_normal,
         )
