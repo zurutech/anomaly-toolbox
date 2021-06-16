@@ -1,0 +1,40 @@
+{
+    "anogan":
+        {
+            "anomalous_label": {"values": [2], "type": "Discrete"},
+            "epochs": {"values": [15], "type": "Discrete"},
+            "batch_size": {"values": [32], "type": "Discrete"},
+            "optimizer": {"values": ["adam"], "type": "Discrete"},
+            "learning_rate": {"values": [0.002], "type": "Discrete"},
+            "shuffle_buffer_size": {"values": [10000], "type": "Discrete"},
+            "latent_vector_size": {"values": [100], "type": "Discrete"}
+        },
+
+    "ganomaly":
+        {
+            "anomalous_label": {"values": [2], "type": "Discrete"},
+            "epochs": {"values": [15], "type": "Discrete"},
+            "batch_size": {"values": [32], "type": "Discrete"},
+            "optimizer": {"values": ["adam"], "type": "Discrete"},
+            "learning_rate": {"values": [0.002], "type": "Discrete"},
+            "adversarial_loss_weight": {"values": [1], "type": "Discrete"},
+            "contextual_loss_weight": {"values": [50], "type": "Discrete"},
+            "enc_loss_weight": {"values": [1], "type": "Discrete"},
+            "shuffle_buffer_size": {"values": [10000], "type": "Discrete"},
+            "latent_vector_size": {"values": [100], "type": "Discrete"}
+        },
+
+    "egbad":
+        {
+            "anomalous_label": {"values": [2], "type": "Discrete"},
+            "epochs": {"values": [15], "type": "Discrete"},
+            "batch_size": {"values": [32], "type": "Discrete"},
+            "optimizer": {"values": ["adam"], "type": "Discrete"},
+            "learning_rate": {"values": [0.002], "type": "Discrete"},
+            "shuffle_buffer_size": {"values": [10000], "type": "Discrete"},
+            "latent_vector_size": {"values": [128], "type": "Discrete"}
+        }
+}
+
+
+
