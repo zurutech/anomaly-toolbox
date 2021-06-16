@@ -7,27 +7,40 @@ import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.experiments.interface import Experiment
-from anomaly_toolbox.hps import grid_search
 from anomaly_toolbox.trainers import EGBAD
 from anomaly_toolbox.datasets import MNIST
+from anomaly_toolbox.hps import hparam_parser
 
 
 __ALL__ = ["EGBADExperimentMNIST"]
 
 
 class EGBADExperimentMNIST(Experiment):
+    """
+    EGBAD experiment on MNIST.
+    """
+    def __init__(self, hparams_path: Path, log_dir: Path):
+        super().__init__(hparams_path, log_dir)
+
+        # List of hyperparameters names (to get from JSON)
+        self._hyperparameters_names = [
+            "anomalous_label",
+            "epochs",
+            "batch_size",
+            "optimizer",
+            "learning_rate",
+            "shuffle_buffer_size",
+            "latent_vector_size",
+        ]
+
+        # Get the hyperparameters
+        self._hps = hparam_parser(
+            self._hparams_path, "egbad", self._hyperparameters_names
+        )
+
     input_dimension: Tuple[int, int, int] = (32, 32, 1)
     filters: int = 64
-    # --- HPS ---
-    hps: List[hp.HParam] = [
-        hp.HParam("anomalous_label", hp.Discrete([2])),
-        hp.HParam("epoch", hp.Discrete([1, 5, 10, 15])),
-        hp.HParam("batch_size", hp.Discrete([32])),
-        hp.HParam("optimizer", hp.Discrete(["adam"])),  # NOTE: Currently unused
-        hp.HParam("learning_rate", hp.Discrete([0.002, 0.001, 0.0005])),
-        hp.HParam("shuffle_buffer_size", hp.Discrete([10000])),
-        hp.HParam("latent_vector_size", hp.Discrete([128])),
-    ]
+
     metrics: List[hp.Metric] = [
         hp.Metric("test_epoch_d_loss", display_name="Discriminator Loss"),
         hp.Metric("test_epoch_g_loss", display_name="Generator Loss"),
@@ -54,15 +67,7 @@ class EGBADExperimentMNIST(Experiment):
             hps=hps,
             summary_writer=summary_writer,
         )
-        trainer.train_mnist(
-            epoch=hps["epoch"],
-        )
 
-    def run(self):
-        """Run the Experiment."""
-        grid_search(
-            self.experiment_run,
-            hps=self.hps,
-            metrics=self.metrics,
-            log_dir=str(self.log_dir),
+        trainer.train_mnist(
+            epoch=hps["epochs"],
         )

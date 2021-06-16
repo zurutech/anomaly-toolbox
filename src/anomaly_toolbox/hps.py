@@ -1,10 +1,62 @@
 """Common utilities for HPS search."""
 
 import itertools
-from typing import Dict, List, Tuple
+from typing import List
+from pathlib import Path
+import json
+import sys
 
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
+
+
+def hparam_parser(
+    hparams_path: Path, experiment: str, hyperparameters_names: List[str]
+) -> List[hp.HParam]:
+    """
+    JSON hyperparameters file parser.
+
+    Args:
+        hparams_path: The path of the JSON hparams file.
+        experiment: The name of the experiment.
+        hyperparameters_names: The list of hyperparameters to be used.
+
+    Returns:
+        A list of hyperparameters.
+    """
+    with open(hparams_path) as f:
+        data = json.load(f)
+
+    # Get the experiment name
+    experiment_data = data[experiment]
+
+    # FIll the hparam list
+    hps: List[hp.HParam] = []
+    for hparam_name in hyperparameters_names:
+
+        # Current parameter object
+        try:
+            current_param = experiment_data[hparam_name]
+        except KeyError:
+            print(
+                f"ERROR: '{hparam_name}' key does not exist inside the {hparams_path} file, "
+                f"please check."
+            )
+            sys.exit(1)
+
+        # Get the 'hp' attribute taking the correct "type" from the JSON object (usually the
+        # type is 'Discrete')
+        hp_attr = getattr(hp, current_param["type"])
+
+        # Fill the list with the hparam name and the value of the correct type (e.g., 'Discrete')
+        hps.append(
+            hp.HParam(
+                hparam_name,
+                hp_attr(current_param["values"]),
+            )
+        )
+
+    return hps
 
 
 def grid_search(
