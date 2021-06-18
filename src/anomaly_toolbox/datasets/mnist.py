@@ -1,7 +1,7 @@
 """MNIST dataset, splitted to be used for anomaly detection."""
 
 from functools import partial
-from typing import Tuple, Optional
+from typing import Tuple
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -10,18 +10,22 @@ from .dataset import AnomalyDetectionDataset
 
 
 class MNIST(AnomalyDetectionDataset):
-    """MNIST dataset, split to be used for anomaly detection."""
+    """MNIST dataset, split to be used for anomaly detection.
+    Note:
+        The label 1 is for the ANOMALOUS class.
+        The label 0 is for the NORMAL class.
+    """
 
     def __init__(self):
         super().__init__()
-        (self._ds_train, self._ds_test), self.ds_info = tfds.load(
+        (self._train_raw, self._test_raw), _ = tfds.load(
             "mnist",
             split=["train", "test"],
             as_supervised=True,
             with_info=True,
         )
 
-    def assemble_datasets(
+    def configure(
         self,
         anomalous_label: int,
         batch_size: int,
@@ -29,10 +33,9 @@ class MNIST(AnomalyDetectionDataset):
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
         drop_remainder: bool = True,
-    ) -> Tuple[tf.data.Dataset, tf.data.Dataset, tf.data.Dataset, tf.data.Dataset]:
-
+    ):
         pipeline = partial(
-            MNIST.pipeline,
+            self.pipeline,
             size=new_size,
             batch_size=batch_size,
             shuffle_buffer_size=shuffle_buffer_size,
@@ -42,27 +45,46 @@ class MNIST(AnomalyDetectionDataset):
 
         pipeline_train = partial(pipeline, is_training=True)
         pipeline_test = partial(pipeline, is_training=False)
-        is_anomalous = lambda _, label: label == anomalous_label
-        is_normal = lambda _, label: label != anomalous_label
+        is_anomalous = lambda _, label: tf.equal(label, anomalous_label)
+        is_normal = lambda _, label: tf.not_equal(label, anomalous_label)
 
         # Train-data
-        self._ds_train_anomalous = self._ds_train.filter(is_anomalous).apply(
-            pipeline_train
+        self._train_anomalous = (
+            self._train_raw.filter(is_anomalous)
+            .map(lambda x, y: (x, self.anomalous_label))
+            .apply(pipeline_train)
         )
-        self._ds_train_normal = self._ds_train.filter(is_normal).apply(pipeline_train)
+        self._train_normal = (
+            self._train_raw.filter(is_normal)
+            .map(lambda x, y: (x, self.normal_label))
+            .apply(pipeline_train)
+        )
+        self._train = self._train_raw.map(
+            lambda x, label: (
+                x,
+                tf.cast(tf.equal(label, anomalous_label), tf.int32),
+            )
+        ).apply(pipeline_train)
 
         # Test-data
-        self._ds_test_anomalous = self._ds_test.filter(is_anomalous).apply(
-            pipeline_test
+        self._test_anomalous = (
+            self._test_raw.filter(is_anomalous)
+            .map(lambda x, y: (x, self.anomalous_label))
+            .apply(pipeline_test)
         )
-        self._ds_test_normal = self._ds_test.filter(is_normal).apply(pipeline_test)
+        self._test_normal = (
+            self._test_raw.filter(is_normal)
+            .map(lambda x, y: (x, self.normal_label))
+            .apply(pipeline_test)
+        )
 
-        return (
-            self.train_normal,
-            self.train_anomalous,
-            self.test_normal,
-            self.test_anomalous,
-        )
+        # Complete dataset with positive and negatives
+        def _to_binary(x, y):
+            if tf.equal(y, anomalous_label):
+                return (x, self.anomalous_label)
+            return (x, self.normal_label)
+
+        self._test = self._test_raw.map(_to_binary).apply(pipeline_test)
 
     @staticmethod
     def pipeline(

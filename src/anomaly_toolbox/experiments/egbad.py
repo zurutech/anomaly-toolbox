@@ -19,6 +19,7 @@ class EGBADExperimentMNIST(Experiment):
     """
     EGBAD experiment on MNIST.
     """
+
     def __init__(self, hparams_path: Path, log_dir: Path):
         super().__init__(hparams_path, log_dir)
 
@@ -53,7 +54,7 @@ class EGBADExperimentMNIST(Experiment):
 
         # Create the dataset
         mnist_dataset = MNIST()
-        mnist_dataset.assemble_datasets(
+        mnist_dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
             new_size=(32, 32),

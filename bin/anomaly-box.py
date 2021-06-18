@@ -68,7 +68,9 @@ def main(
             / chosen_experiment
             / datetime.now().strftime("%Y%m%d-%H%M%S")
         )
-        experiment = AVAILABLE_EXPERIMENTS[chosen_experiment.lower()](hparams_file_path, log_dir)
+        experiment = AVAILABLE_EXPERIMENTS[chosen_experiment.lower()](
+            hparams_file_path, log_dir
+        )
         experiment.run(hparams_tuning, grid_search)
     elif chosen_benchmark:
         benchmark = AVAILABLE_BENCHMARKS[chosen_benchmark.lower()](run_path=test_run)

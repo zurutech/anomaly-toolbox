@@ -12,6 +12,7 @@ class Trainer:
     The Trainer represent the class to be used by all trainer objects.
     The class has the basic members that every trainer should have.
     """
+
     def __init__(
         self,
         dataset: AnomalyDetectionDataset,

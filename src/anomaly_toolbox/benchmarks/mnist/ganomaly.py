@@ -37,7 +37,7 @@ class GANomalyMNISTBenchmark:
             batch_size = 32
 
         ds_builder = MNIST()
-        datasets = ds_builder.assemble_datasets(
+        datasets = ds_builder.configure(
             anomalous_label=anomalous_label, batch_size=batch_size, new_size=(32, 32)
         )
 

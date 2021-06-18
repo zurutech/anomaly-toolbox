@@ -15,7 +15,7 @@ class CorruptedMNIST(MNIST):
                              https://www.tensorflow.org/datasets/catalog/mnist_corrupted
         """
         super().__init__()
-        (self._ds_train, self._ds_test), self.ds_info = tfds.load(
+        (self._train, self._test), _ = tfds.load(
             f"mnist_corrupted/{corruption_type}",
             split=["train", "test"],
             as_supervised=True,
