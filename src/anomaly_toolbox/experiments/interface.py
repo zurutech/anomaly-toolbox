@@ -9,6 +9,7 @@ class Experiment(abc.ABC):
     """
     The Experiment class represent the basic class to be used by each experiment.
     """
+
     def __init__(self, hparams_file_path: Path, log_dir: Path) -> None:
         """
         Experiment ctor.

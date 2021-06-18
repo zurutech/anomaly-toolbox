@@ -58,7 +58,7 @@ class GANomalyExperimentMNIST(Experiment):
         summary_writer = tf.summary.create_file_writer(str(log_dir))
 
         mnist_dataset = MNIST()
-        mnist_dataset.assemble_datasets(
+        mnist_dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
             new_size=(32, 32),
