@@ -6,3 +6,5 @@ click
 tensorflow
 scikit_learn
 tensorflow_datasets
+requests
+rarfile

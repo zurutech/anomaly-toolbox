@@ -1,12 +1,12 @@
 """MNIST dataset, splitted to be used for anomaly detection."""
 
 from functools import partial
-from typing import Tuple
+from typing import Optional, Tuple
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
 
-from .dataset import AnomalyDetectionDataset
+from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 
 
 class MNIST(AnomalyDetectionDataset):
@@ -27,20 +27,37 @@ class MNIST(AnomalyDetectionDataset):
 
     def configure(
         self,
-        anomalous_label: int,
         batch_size: int,
-        new_size: Tuple[int, int] = (28, 28),
+        new_size: Tuple[int, int],
+        anomalous_label: Optional[int] = None,
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
         drop_remainder: bool = True,
-    ):
+        output_range: Tuple[float, float] = (-1.0, 1.0),
+    ) -> None:
+        """Configure the dataset. This makes all the object properties valid (not None).
+        Args:
+            batch_size: the dataset batch size
+            new_size: (H,W) of the input image.
+            anomalous_label: if the raw dataset contains label, all the elements with
+                             "anomalous_label" are converted to element of
+                             self.anomalous_label class.
+            shuffle_buffer_size: buffer size used during the tf.data.Dataset.shuffle call.
+            cache: if True, cache the dataset
+            drop_remainder: if True, when the dataset size is not a multiple of the dataset size,
+                            the last batch will be dropped.
+            output_range: a Tuple (min, max) containing the output range to use
+                          for the processed images.
+        """
+
         pipeline = partial(
             self.pipeline,
-            size=new_size,
+            new_size=new_size,
             batch_size=batch_size,
             shuffle_buffer_size=shuffle_buffer_size,
             cache=cache,
             drop_remainder=drop_remainder,
+            output_range=output_range,
         )
 
         pipeline_train = partial(pipeline, is_training=True)
@@ -85,34 +102,3 @@ class MNIST(AnomalyDetectionDataset):
             return (x, self.normal_label)
 
         self._test = self._test_raw.map(_to_binary).apply(pipeline_test)
-
-    @staticmethod
-    def pipeline(
-        dataset: tf.data.Dataset,
-        size: Tuple[int, int],
-        batch_size: int,
-        cache: bool,
-        shuffle_buffer_size: int,
-        is_training: bool = True,
-        drop_remainder: bool = True,
-    ) -> tf.data.Dataset:
-        """Given a dataset, configure it applying the chain of
-        map, filter, shuffle and all the needed methods of the tf.data.Dataset.
-        """
-        dataset = dataset.map(
-            lambda image, label: (
-                tf.image.resize(
-                    image, size=size, method=tf.image.ResizeMethod.NEAREST_NEIGHBOR
-                ),
-                label,
-            )
-        )
-        dataset = dataset.map(
-            lambda image, label: (tf.cast(image, tf.float32) / 255.0, label)
-        )
-        if is_training:
-            dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)
-        dataset = dataset.batch(batch_size, drop_remainder=drop_remainder)
-        if cache:
-            dataset = dataset.cache()
-        return dataset

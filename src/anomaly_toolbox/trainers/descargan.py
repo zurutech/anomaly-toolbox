@@ -6,7 +6,6 @@ import tensorflow as tf
 import tensorflow.keras as k
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.datasets import MNIST
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.models.descargan import Discriminator, Generator
 from anomaly_toolbox.trainers.trainer import Trainer
@@ -402,30 +401,39 @@ class DeScarGAN(Trainer):
 
 
 if __name__ == "__main__":
-    anomalous_label = 2
-    epochs = 5
-    batch_size = 50
-    input_shape = (64, 64, 1)
-    step_log_frequency = 50
-    hps = {"learning_rate": hp.HParam("learning_rate", hp.Discrete([2e-5]))}
+    from anomaly_toolbox.datasets import MNIST, SurfaceCracks
 
-    log_dir = "cane"
-    summary_writer = tf.summary.create_file_writer(log_dir)
+    def _main():
+        anomalous_label = 2
+        epochs = 5
+        batch_size = 50
 
-    mnist_dataset = MNIST()
+        input_shape = (64, 64, 1)
+        # input_shape = (64, 64, 3)  # 3 = surface cracks
+        step_log_frequency = 1
+        hps = {"learning_rate": hp.HParam("learning_rate", hp.Discrete([2e-5]))}
 
-    mnist_dataset.configure(
-        anomalous_label=anomalous_label,
-        batch_size=batch_size,
-        new_size=input_shape[:-1],
-    )
-    for lr in hps["learning_rate"].domain.values:
-        hparams = {"learning_rate": lr}
-        trainer = DeScarGAN(mnist_dataset, input_shape, hparams, summary_writer)
-        trainer.train(
+        log_dir = "cane"
+        summary_writer = tf.summary.create_file_writer(log_dir)
+
+        # dataset = SurfaceCracks()
+        dataset = MNIST()
+
+        dataset.configure(
+            anomalous_label=anomalous_label,  # ignored if datset = SurfaceCracks
             batch_size=batch_size,
-            epochs=epochs,
-            step_log_frequency=step_log_frequency,
+            new_size=input_shape[:-1],
+            output_range=(-1.0, 1.0),  # generator has a tanh in output
         )
-        trainer.discriminator.save(log_dir + "/discriminator")
-        trainer.generator.save(log_dir + "/generator")
+        for lr in hps["learning_rate"].domain.values:
+            hparams = {"learning_rate": lr}
+            trainer = DeScarGAN(dataset, input_shape, hparams, summary_writer)
+            trainer.train(
+                batch_size=batch_size,
+                epochs=epochs,
+                step_log_frequency=step_log_frequency,
+            )
+            trainer.discriminator.save(log_dir + "/discriminator")
+            trainer.generator.save(log_dir + "/generator")
+
+    _main()
