@@ -375,6 +375,8 @@ class DeScarGAN(Trainer):
                 g_loss = tf.constant(0.0)
 
         d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
+        # Gradient clipping
+        d_grads = [tf.clip_by_norm(g, clip_norm=10) for g in d_grads]
         self.d_optimizer.apply_gradients(
             zip(d_grads, self.discriminator.trainable_variables)
         )
@@ -392,6 +394,8 @@ class DeScarGAN(Trainer):
             tf.constant(0, dtype=tf.int32),
         ):
             g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
+            # Gradient clipping
+            g_grads = [tf.clip_by_norm(g, clip_norm=10) for g in g_grads]
             self.g_optimizer.apply_gradients(
                 zip(g_grads, self.generator.trainable_variables)
             )
