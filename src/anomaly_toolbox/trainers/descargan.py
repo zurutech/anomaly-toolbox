@@ -49,7 +49,7 @@ class DeScarGAN(Trainer):
         self._g_lambda_identity = tf.constant(50.0)
         self._g_lambda_reconstruction = tf.constant(50.0)
         self._g_lambda_fake = tf.constant(1.0)
-        self._g_lambda_classification = tf.constant(5.0)
+        self._g_lambda_classification = tf.constant(1.0)
 
         self._d_lambda_gradient_penalty = tf.constant(10.0)
         self._d_lambda_fake = tf.constant(20.0)
@@ -67,6 +67,9 @@ class DeScarGAN(Trainer):
         self.epoch_g_loss_avg = k.metrics.Mean(name="epoch_generator_loss")
         self._keras_metrics = [self.epoch_d_loss_avg, self.epoch_g_loss_avg]
 
+        # Constants
+        self._zero = tf.constant(0.0)
+
     def _validate_models(self, input_shape: Tuple[int, int, int]):
         fake_batch_size = (1,) + input_shape
         inputs = [tf.zeros(fake_batch_size), tf.zeros((1,))]
@@ -76,7 +79,19 @@ class DeScarGAN(Trainer):
         self.generator.summary()
         self.discriminator.summary()
 
-    @tf.function
+    @staticmethod
+    def clip_by_norm_handle_none(grad, clip_norm):
+        """tape.compute_gradients returns None instead of a zero tensor when the
+        gradient would be a zero tensor and tf.clip_by_* does not support
+        a None value.
+        So just don't pass None to it and preserve None values.
+        Source: https://stackoverflow.com/a/39295309/2891324
+        """
+        if grad is None:
+            return None
+        return tf.clip_by_norm(grad, clip_norm=clip_norm)
+
+    # @tf.function
     def train(
         self,
         batch_size: int,
@@ -181,7 +196,7 @@ class DeScarGAN(Trainer):
         d_regularizer = tf.reduce_mean((ddx - 1.0) ** 2)
         return d_regularizer
 
-    @tf.function
+    # @tf.function
     def train_step(
         self,
         inputs: Tuple[tf.Tensor, tf.Tensor],
@@ -218,8 +233,8 @@ class DeScarGAN(Trainer):
         tot_healthy = tf.cast(tf.shape(x_healthy)[0], tf.float32)
         tot_ill = tf.cast(tf.shape(x_ill)[0], tf.float32)
         tot = tf.cast(tf.shape(x)[0], tf.float32)
-        percentage_healthy = tf.math.divide_no_nan(tot, tot_healthy)
-        percentage_ill = tf.math.divide_no_nan(tot, tot_ill)
+        percentage_healthy = tf.math.divide_no_nan(tot_healthy, tot)
+        percentage_ill = tf.math.divide_no_nan(tot_ill, tot)
 
         # Scalar labels used in the losses
         healthy_labels = tf.ones((tot_healthy,), dtype=tf.int32) * tf.squeeze(
@@ -230,23 +245,35 @@ class DeScarGAN(Trainer):
         # Train the discriminator
         with tf.GradientTape(persistent=True) as tape:
             # With real images - healthy
-            (d_healthy, d_healthy_pred) = self.discriminator(
-                [x_healthy, healthy_labels],
-                training=True,
-            )
-            d_loss_real_healthy = -tf.reduce_mean(d_healthy) * percentage_healthy
-            d_loss_classification_healthy = (
-                self._classification_loss(y_true=healthy_labels, y_pred=d_healthy_pred)
-                * percentage_healthy
-            )
+            if tf.not_equal(percentage_healthy, self._zero):
+                (d_healthy, d_healthy_pred) = self.discriminator(
+                    [x_healthy, healthy_labels],
+                    training=True,
+                )
+                d_loss_real_healthy = -tf.reduce_mean(d_healthy) * percentage_healthy
+                d_loss_classification_healthy = (
+                    self._classification_loss(
+                        y_true=healthy_labels, y_pred=d_healthy_pred
+                    )
+                    * percentage_healthy
+                )
+            else:
+                d_loss_classification_healthy = self._zero
+                d_loss_real_healthy = self._zero
 
             # With real images - ill
-            (d_ill, d_ill_pred) = self.discriminator([x_ill, ill_labels], training=True)
-            d_loss_real_ill = -tf.reduce_mean(d_ill) * percentage_ill
-            d_loss_classification_ill = (
-                self._classification_loss(y_true=ill_labels, y_pred=d_ill_pred)
-                * percentage_ill
-            )
+            if tf.not_equal(percentage_ill, self._zero):
+                (d_ill, d_ill_pred) = self.discriminator(
+                    [x_ill, ill_labels], training=True
+                )
+                d_loss_real_ill = -tf.reduce_mean(d_ill) * percentage_ill
+                d_loss_classification_ill = (
+                    self._classification_loss(y_true=ill_labels, y_pred=d_ill_pred)
+                    * percentage_ill
+                )
+            else:
+                d_loss_classification_ill = self._zero
+                d_loss_real_ill = self._zero
 
             # Total loss on real images
             d_loss_real = d_loss_real_ill + d_loss_real_healthy
@@ -256,43 +283,70 @@ class DeScarGAN(Trainer):
 
             # Generate fake images:
             # Add random noise to the input too
-
             noise_variance = tf.constant(0.05)
-            x_healthy_noisy = (
-                x_healthy
-                + tf.random.uniform(tf.shape(x_healthy), dtype=tf.float32)
-                * noise_variance
-            )
-            x_ill_noisy = (
-                x_ill
-                + tf.random.uniform(tf.shape(x_ill), dtype=tf.float32) * noise_variance
-            )
+            if tf.not_equal(percentage_healthy, self._zero):
+                x_healthy_noisy = (
+                    x_healthy
+                    + tf.random.uniform(tf.shape(x_healthy), dtype=tf.float32)
+                    * noise_variance
+                )
+                x_fake_healthy = self.generator(
+                    [x_healthy_noisy, healthy_labels], training=True
+                )
+                # Add noise to generated and real images - used for the losses
+                x_fake_healthy_noisy = (
+                    x_fake_healthy
+                    + tf.random.uniform(tf.shape(x_fake_healthy), dtype=tf.float32)
+                    * noise_variance
+                )
+                # Train with fake noisy images
+                (d_on_fake_healthy, _) = self.discriminator(
+                    [x_fake_healthy_noisy, healthy_labels], training=True
+                )
 
-            x_fake_healthy = self.generator(
-                [x_healthy_noisy, healthy_labels], training=True
-            )
+                # Gradient penealty
+                d_gradient_penalty_healty = self.gradient_penalty(
+                    x_healthy_noisy,
+                    x_fake_healthy_noisy,
+                    healthy_labels,
+                )
+            else:
+                d_on_fake_healthy = self._zero
+                d_gradient_penalty_healty = self._zero
+                x_fake_healthy = self._zero
+                x_fake_healthy_noisy = self._zero
+                x_healthy_noisy = self._zero
 
-            x_fake_ill = self.generator([x_ill_noisy, ill_labels], training=True)
+            if tf.not_equal(percentage_ill, self._zero):
+                x_ill_noisy = (
+                    x_ill
+                    + tf.random.uniform(tf.shape(x_ill), dtype=tf.float32)
+                    * noise_variance
+                )
+                x_fake_ill = self.generator([x_ill_noisy, ill_labels], training=True)
 
-            # Add noise to generated and real images - used for the losses
-            x_fake_ill_noisy = (
-                x_fake_ill
-                + tf.random.uniform(tf.shape(x_fake_ill), dtype=tf.float32)
-                * noise_variance
-            )
-            x_fake_healthy_noisy = (
-                x_fake_healthy
-                + tf.random.uniform(tf.shape(x_fake_healthy), dtype=tf.float32)
-                * noise_variance
-            )
+                # Add noise to generated and real images - used for the losses
+                x_fake_ill_noisy = (
+                    x_fake_ill
+                    + tf.random.uniform(tf.shape(x_fake_ill), dtype=tf.float32)
+                    * noise_variance
+                )
 
-            # Train with fake noiosy images
-            (d_on_fake_healthy, _) = self.discriminator(
-                [x_fake_healthy_noisy, healthy_labels], training=True
-            )
-            (d_on_fake_ill, _) = self.discriminator(
-                [x_fake_ill_noisy, ill_labels], training=True
-            )
+                # Train with fake noisy images
+                (d_on_fake_ill, _) = self.discriminator(
+                    [x_fake_ill_noisy, ill_labels], training=True
+                )
+
+                # Gradient penalty
+                d_gradient_penalty_ill = self.gradient_penalty(
+                    x_ill_noisy, x_fake_ill_noisy, ill_labels
+                )
+            else:
+                d_on_fake_ill = self._zero
+                d_gradient_penalty_ill = self._zero
+                x_fake_ill = self._zero
+                x_fake_ill_noisy = self._zero
+                x_ill_noisy = self._zero
 
             d_loss_fake = (
                 tf.reduce_mean(d_on_fake_healthy) * percentage_healthy
@@ -300,14 +354,7 @@ class DeScarGAN(Trainer):
             )
 
             # Gradient penalty to improve discriminator training stability
-            d_loss_gp = (
-                self.gradient_penalty(
-                    x_healthy_noisy,
-                    x_fake_healthy_noisy,
-                    healthy_labels,
-                )
-                + self.gradient_penalty(x_ill_noisy, x_fake_ill_noisy, ill_labels)
-            )
+            d_loss_gp = d_gradient_penalty_healty + d_gradient_penalty_ill
 
             # Sum all the losses and compute the discriminator loss
             d_loss = (
@@ -325,13 +372,38 @@ class DeScarGAN(Trainer):
                 0,
             ):
                 # D output reduction is needed because the output is batch_size, w, h, D
-                g_classification_loss_healthy = self._classification_loss(
-                    y_true=healthy_labels,
-                    y_pred=tf.reduce_mean(d_on_fake_healthy, axis=[2, 3]),
-                )
-                g_classification_loss_ill = self._classification_loss(
-                    y_true=ill_labels, y_pred=tf.reduce_mean(d_on_fake_ill, axis=[2, 3])
-                )
+
+                if tf.not_equal(percentage_healthy, self._zero):
+                    g_classification_loss_healthy = self._classification_loss(
+                        y_true=healthy_labels,
+                        y_pred=tf.reduce_mean(d_on_fake_healthy, axis=[2, 3]),
+                    )
+                    g_identity_loss_healthy = self._reconstruction_error(
+                        y_true=x_healthy, y_pred=x_fake_healthy
+                    )
+                    g_reconstruction_loss_healthy = self._reconstruction_error(
+                        y_true=x_healthy_noisy, y_pred=x_fake_healthy
+                    )
+                else:
+                    g_classification_loss_healthy = self._zero
+                    g_identity_loss_healthy = self._zero
+                    g_reconstruction_loss_healthy = self._zero
+
+                if tf.not_equal(percentage_ill, self._zero):
+                    g_classification_loss_ill = self._classification_loss(
+                        y_true=ill_labels,
+                        y_pred=tf.reduce_mean(d_on_fake_ill, axis=[2, 3]),
+                    )
+                    g_identity_loss_ill = self._reconstruction_error(
+                        y_true=x_ill, y_pred=x_fake_ill
+                    )
+                    g_reconstruction_loss_ill = self._reconstruction_error(
+                        y_true=x_ill_noisy, y_pred=x_fake_ill
+                    )
+                else:
+                    g_classification_loss_ill = self._zero
+                    g_identity_loss_ill = self._zero
+                    g_reconstruction_loss_ill = self._zero
 
                 g_classification_loss = (
                     g_classification_loss_ill + g_classification_loss_healthy
@@ -343,23 +415,9 @@ class DeScarGAN(Trainer):
                 )
 
                 # Identity loss
-                g_identity_loss_healthy = self._reconstruction_error(
-                    y_true=x_healthy, y_pred=x_fake_healthy
-                )
-                g_identity_loss_ill = self._reconstruction_error(
-                    y_true=x_ill, y_pred=x_fake_ill
-                )
-
                 g_identity_loss = g_identity_loss_ill + g_identity_loss_healthy
 
                 # Reconstruction loss
-                g_reconstruction_loss_healthy = self._reconstruction_error(
-                    y_true=x_healthy_noisy, y_pred=x_fake_healthy
-                )
-                g_reconstruction_loss_ill = self._reconstruction_error(
-                    y_true=x_ill_noisy, y_pred=x_fake_ill
-                )
-
                 g_reconstruction_loss = (
                     g_reconstruction_loss_healthy + g_reconstruction_loss_ill
                 )
@@ -372,11 +430,11 @@ class DeScarGAN(Trainer):
                     + self._g_lambda_classification * g_classification_loss
                 )
             else:
-                g_loss = tf.constant(0.0)
+                g_loss = self._zero
 
         d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
         # Gradient clipping
-        d_grads = [tf.clip_by_norm(g, clip_norm=10) for g in d_grads]
+        d_grads = [self.clip_by_norm_handle_none(g, clip_norm=10) for g in d_grads]
         self.d_optimizer.apply_gradients(
             zip(d_grads, self.discriminator.trainable_variables)
         )
@@ -395,7 +453,7 @@ class DeScarGAN(Trainer):
         ):
             g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
             # Gradient clipping
-            g_grads = [tf.clip_by_norm(g, clip_norm=10) for g in g_grads]
+            g_grads = [self.clip_by_norm_handle_none(g, clip_norm=10) for g in g_grads]
             self.g_optimizer.apply_gradients(
                 zip(g_grads, self.generator.trainable_variables)
             )
@@ -410,7 +468,7 @@ if __name__ == "__main__":
     def _main():
         anomalous_label = 2
         epochs = 5
-        batch_size = 50
+        batch_size = 10
 
         input_shape = (64, 64, 1)
         # input_shape = (64, 64, 3)  # 3 = surface cracks
