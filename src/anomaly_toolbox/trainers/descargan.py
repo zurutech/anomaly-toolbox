@@ -65,7 +65,14 @@ class DeScarGAN(Trainer):
         # Training Metrics
         self.epoch_d_loss_avg = k.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = k.metrics.Mean(name="epoch_generator_loss")
-        self._keras_metrics = [self.epoch_d_loss_avg, self.epoch_g_loss_avg]
+        self.accuracy = k.metrics.BinaryAccuracy(name="binary_accuracy")
+        self.keras_metrics = {
+            metric.name: metric
+            for metric in [self.epoch_d_loss_avg, self.epoch_g_loss_avg, self.accuracy]
+        }
+        # Outside of the keras_metrics because it's used to compute the running
+        # mean and not as a metric
+        self._mean = k.metrics.Mean()
 
         # Constants
         self._zero = tf.constant(0.0)
@@ -103,6 +110,8 @@ class DeScarGAN(Trainer):
         step_log_frequency = tf.convert_to_tensor(step_log_frequency, dtype=tf.int64)
         epochs = tf.convert_to_tensor(epochs, dtype=tf.int32)
         batch_size = tf.convert_to_tensor(batch_size, dtype=tf.int32)
+
+        previous_accuracy = -1.0
 
         for epoch in tf.range(epochs):
             for batch in self._dataset.train:
@@ -170,6 +179,55 @@ class DeScarGAN(Trainer):
                         ", g_loss: ",
                         g_loss,
                     )
+            # Epoch end
+
+            # Global classification (not pixel level)
+            # 1. Find the reconstruction error on the training set (normal only)
+            # 2. Use the threshold to classify the validation set (positive and negative)
+            # 3. Compute the binary accuracy (we can use it since the dataset is perfectly balanced)
+            self._mean.reset_state()
+            for x, y in self._dataset.train_normal:
+                self._mean.update_state(
+                    tf.reduce_mean(
+                        tf.math.abs(self.generator((x, y), training=False) - x)
+                    )
+                )
+            threshold = self._mean.result()
+
+            # reconstruction <= threshold => normal data (label 0)
+            for x, y in self._dataset.test:
+                self.accuracy.update_state(
+                    y_true=y,
+                    y_pred=tf.cast(
+                        # reconstruction > threshold => anomalous (label 1 = cast(True))
+                        # invoke the generator always with the normal label, since that's
+                        # what we suppose to receive in input (and the threshold has been found
+                        # using data that comes only from the normal distribution)
+                        tf.math.greater(
+                            tf.reduce_mean(
+                                tf.math.abs(
+                                    self.generator(
+                                        (x, self._dataset.normal_label), training=False
+                                    )
+                                    - x
+                                ),
+                                axis=[1, 2, 3],
+                            ),
+                            threshold,
+                        ),
+                        tf.int32,
+                    ),
+                )
+            tf.print("Reconstruction error on train set (normal): ", threshold)
+            current_accuracy = self.accuracy.result()
+            tf.print("Binary accuracy on validation set: ", current_accuracy)
+            if previous_accuracy < current_accuracy:
+                self.generator.save(
+                    "best_model/generator", overwrite=True, include_optimizer=False
+                )
+
+            with self._summary_writer.as_default():
+                tf.summary.scalar("accuracy", current_accuracy, step=step)
 
             # Reset the metrics at the end of every epoch
             self._reset_keras_metrics()
@@ -468,26 +526,27 @@ if __name__ == "__main__":
 
     def _main():
         anomalous_label = 2
-        epochs = 5
-        batch_size = 10
+        epochs = 50
+        batch_size = 30
 
-        input_shape = (64, 64, 1)
-        # input_shape = (64, 64, 3)  # 3 = surface cracks
-        step_log_frequency = 1
-        hps = {"learning_rate": hp.HParam("learning_rate", hp.Discrete([2e-5]))}
+        # input_shape = (64, 64, 1)
+        input_shape = (64, 64, 3)  # 3 = surface cracks
+        step_log_frequency = 50
+        hps = {"learning_rate": hp.HParam("learning_rate", hp.Discrete([1e-4]))}
 
-        log_dir = "cane"
-        summary_writer = tf.summary.create_file_writer(log_dir)
-
-        # dataset = SurfaceCracks()
-        dataset = MNIST()
+        dataset = SurfaceCracks()
+        # dataset = MNIST()
 
         dataset.configure(
             anomalous_label=anomalous_label,  # ignored if datset = SurfaceCracks
             batch_size=batch_size,
             new_size=input_shape[:-1],
             output_range=(-1.0, 1.0),  # generator has a tanh in output
+            shuffle_buffer_size=20000,
+            cache=True,
         )
+        log_dir = "cane"
+        summary_writer = tf.summary.create_file_writer(log_dir)
         for lr in hps["learning_rate"].domain.values:
             hparams = {"learning_rate": lr}
             trainer = DeScarGAN(dataset, input_shape, hparams, summary_writer)

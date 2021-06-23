@@ -6,10 +6,10 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
+from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.losses import adversarial_loss, feature_matching_loss
 from anomaly_toolbox.models import AnoGANAssembler, AnoGANMNISTAssembler
 from anomaly_toolbox.trainers.trainer import Trainer
-from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 
 __ALL__ = ["AnoGAN", "AnoGANMNIST"]
 
@@ -29,9 +29,7 @@ class AnoGAN(Trainer):
         """Initialize AnoGAN Trainer."""
         super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
 
-        # |--------|
-        # | MODELS |
-        # |--------|
+        # Models
         if use_generic_architecture:
             print("Initializing AnoGAN Trainer")
             self.discriminator = AnoGANAssembler.assemble_discriminator(
@@ -44,10 +42,7 @@ class AnoGAN(Trainer):
             )
             self._validate_models(input_dimension, hps["latent_vector_size"])
 
-        # |------------|
-        # | OPTIMIZERS |
-        # |------------|
-        # TODO: These should be constructed from passed HPS
+        # Optimizers
         self.optimizer_g = keras.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
@@ -55,11 +50,7 @@ class AnoGAN(Trainer):
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
 
-        # |---------|
-        # | Metrics |
-        # |---------|
-
-        # Training Metrics
+        # Metrics
         self.epoch_d_loss_avg = tf.keras.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = tf.keras.metrics.Mean(name="epoch_generator_loss")
         self._training_keras_metrics = [self.epoch_d_loss_avg, self.epoch_g_loss_avg]
@@ -69,7 +60,10 @@ class AnoGAN(Trainer):
         self.test_g_loss_avg = tf.keras.metrics.Mean(name="test_generator_loss")
 
         self._test_keras_metrics = [self.test_d_loss_avg, self.test_g_loss_avg]
-        self._keras_metrics = self._training_keras_metrics + self._test_keras_metrics
+        self.keras_metrics = {
+            metric.name: metric
+            for metric in self._training_keras_metrics + self._test_keras_metrics
+        }
 
     def _validate_models(
         self, input_dimension: Tuple[int, int, int], latent_vector_size: int
