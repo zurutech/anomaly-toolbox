@@ -6,10 +6,10 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
+from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.losses import egbad as losses
 from anomaly_toolbox.models import EGBADBiGANAssembler
 from anomaly_toolbox.trainers.trainer import Trainer
-from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 
 __ALL__ = ["EGBAD"]
 
@@ -29,9 +29,7 @@ class EGBAD(Trainer):
         print("Initializing EGBAD-BiGAN Trainer")
         super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
 
-        # |--------|
-        # | MODELS |
-        # |--------|
+        # Models
         self.discriminator = EGBADBiGANAssembler.assemble_discriminator(
             input_dimension, filters, self._hps["latent_vector_size"]
         )
@@ -56,10 +54,7 @@ class EGBAD(Trainer):
         self.encoder.summary()
         self.discriminator.summary()
 
-        # |------------|
-        # | OPTIMIZERS |
-        # |------------|
-        # TODO: These should be constructed from passed HPS
+        # Optimizers
         self.optimizer_g = keras.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
@@ -70,9 +65,6 @@ class EGBAD(Trainer):
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
 
-        # |---------|
-        # | Metrics |
-        # |---------|
         # Training Metrics
         self.epoch_d_loss_avg = tf.keras.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = tf.keras.metrics.Mean(name="epoch_generator_loss")
@@ -91,7 +83,10 @@ class EGBAD(Trainer):
             self.test_g_loss_avg,
             self.test_e_loss_avg,
         ]
-        self._keras_metrics = self._training_keras_metrics + self._test_keras_metrics
+        self.keras_metrics = {
+            metric.name: metric
+            for metric in self._training_keras_metrics + self._test_keras_metrics
+        }
 
     def train(
         self,
