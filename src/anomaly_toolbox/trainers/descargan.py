@@ -114,8 +114,9 @@ class DeScarGAN(Trainer):
                 self.epoch_g_loss_avg.update_state(g_loss)
                 step = self.d_optimizer.iterations
 
+                # step -1 because in train_step self.d_optimizer.iterations has been incremented
                 if tf.math.equal(
-                    tf.math.mod(step, step_log_frequency),
+                    tf.math.mod(step - 1, step_log_frequency),
                     tf.constant(0, tf.int64),
                 ):
                     with self._summary_writer.as_default():
