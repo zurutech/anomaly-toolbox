@@ -207,7 +207,12 @@ class DeScarGAN(Trainer):
                             tf.reduce_mean(
                                 tf.math.abs(
                                     self.generator(
-                                        (x, self._dataset.normal_label), training=False
+                                        (
+                                            x,
+                                            tf.ones(tf.shape(x)[0], dtype=tf.int32)
+                                            * self._dataset.normal_label,
+                                        ),
+                                        training=False,
                                     )
                                     - x
                                 ),
