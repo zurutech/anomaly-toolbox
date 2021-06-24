@@ -1,5 +1,6 @@
 """Trainer for the DeScarGAN model."""
 
+import json
 from typing import Dict, Tuple
 
 import tensorflow as tf
@@ -111,7 +112,7 @@ class DeScarGAN(Trainer):
         epochs = tf.convert_to_tensor(epochs, dtype=tf.int32)
         batch_size = tf.convert_to_tensor(batch_size, dtype=tf.int32)
 
-        previous_accuracy = -1.0
+        best_accuracy = -1.0
 
         for epoch in tf.range(epochs):
             for batch in self._dataset.train:
@@ -182,20 +183,35 @@ class DeScarGAN(Trainer):
             # Epoch end
 
             # Global classification (not pixel level)
-            # 1. Find the reconstruction error on the training set (normal only)
+            # 1. Find the reconstruction error on a sub-set of the validation set
+            # that WON'T be used during the score computation.
+            # Reason: https://stats.stackexchange.com/a/427468/91290
+            #
+            # "The error distribution on the training data is misleading since your
+            # training error distribution is not identical to test error distribution,
+            # due to inevitable over-fitting. Then, comparing training error
+            # distribution with future data is unjust."
+            #
             # 2. Use the threshold to classify the validation set (positive and negative)
             # 3. Compute the binary accuracy (we can use it since the dataset is perfectly balanced)
             self._mean.reset_state()
-            for x, y in self._dataset.train_normal:
+            subset = self._dataset.test_normal.take(10)
+            for x, y in subset:
                 self._mean.update_state(
                     tf.reduce_mean(
                         tf.math.abs(self.generator((x, y), training=False) - x)
                     )
                 )
             threshold = self._mean.result()
+            tf.print(
+                "Reconstruction error on unseen subset (normal samples only): ",
+                threshold,
+            )
 
             # reconstruction <= threshold => normal data (label 0)
-            for x, y in self._dataset.test:
+            for x, y in self._dataset.test_normal.skip(10).concatenate(
+                self._dataset.test_anomalous
+            ):  # skip first 10 used for threshold computation
                 self.accuracy.update_state(
                     y_true=y,
                     y_pred=tf.cast(
@@ -223,13 +239,18 @@ class DeScarGAN(Trainer):
                         tf.int32,
                     ),
                 )
-            tf.print("Reconstruction error on train set (normal): ", threshold)
-            current_accuracy = self.accuracy.result()
+            current_accuracy = self.accuracy.result().numpy()
             tf.print("Binary accuracy on validation set: ", current_accuracy)
-            if previous_accuracy < current_accuracy:
+            if best_accuracy < current_accuracy:
                 self.generator.save(
-                    "best_model/generator", overwrite=True, include_optimizer=False
+                    "results/descargan/best/generator",
+                    overwrite=True,
+                    include_optimizer=False,
                 )
+                with open("results/descargan/best/accuracy.json", "w") as fp:
+                    json.dump({"value": float(current_accuracy)}, fp)
+
+                best_accuracy = current_accuracy
 
             with self._summary_writer.as_default():
                 tf.summary.scalar("accuracy", current_accuracy, step=step)
