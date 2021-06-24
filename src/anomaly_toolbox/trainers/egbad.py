@@ -1,6 +1,6 @@
 """Trainer for the BiGAN model used in EGBAD."""
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -8,10 +8,8 @@ from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.losses import egbad as losses
-from anomaly_toolbox.models import EGBADBiGANAssembler
+from anomaly_toolbox.models.egbad import EGBADBiGANAssembler
 from anomaly_toolbox.trainers.trainer import Trainer
-
-__ALL__ = ["EGBAD"]
 
 
 class EGBAD(Trainer):
@@ -87,6 +85,11 @@ class EGBAD(Trainer):
             metric.name: metric
             for metric in self._training_keras_metrics + self._test_keras_metrics
         }
+
+    @staticmethod
+    def hyperparameters() -> Set[str]:
+        """List of the hyperparameters name used by the trainer."""
+        return {"learning_rate", "latent_vector_size"}
 
     def train(
         self,

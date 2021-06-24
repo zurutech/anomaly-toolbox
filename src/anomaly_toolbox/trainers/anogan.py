@@ -1,6 +1,6 @@
 """Trainer for the AnoGAN model."""
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Set, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -8,10 +8,8 @@ from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.losses import adversarial_loss, feature_matching_loss
-from anomaly_toolbox.models import AnoGANAssembler, AnoGANMNISTAssembler
+from anomaly_toolbox.models.anogan import Discriminator, Generator
 from anomaly_toolbox.trainers.trainer import Trainer
-
-__ALL__ = ["AnoGAN", "AnoGANMNIST"]
 
 
 class AnoGAN(Trainer):
@@ -21,26 +19,16 @@ class AnoGAN(Trainer):
         self,
         dataset: AnomalyDetectionDataset,
         input_dimension: Tuple[int, int, int],
-        filters: int,
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
-        use_generic_architecture: bool = True,
     ):
         """Initialize AnoGAN Trainer."""
         super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
 
         # Models
-        if use_generic_architecture:
-            print("Initializing AnoGAN Trainer")
-            self.discriminator = AnoGANAssembler.assemble_discriminator(
-                input_dimension=input_dimension, filters=filters
-            )
-            self.generator = AnoGANAssembler.assemble_generator(
-                input_dimension=hps["latent_vector_size"],
-                output_dimension=input_dimension,
-                filters=filters,
-            )
-            self._validate_models(input_dimension, hps["latent_vector_size"])
+        self.discriminator = Discriminator()
+        self.generator = Generator(input_dimension=hps["latent_vector_size"])
+        self._validate_models(input_dimension, hps["latent_vector_size"])
 
         # Optimizers
         self.optimizer_g = keras.optimizers.Adam(
@@ -64,6 +52,11 @@ class AnoGAN(Trainer):
             metric.name: metric
             for metric in self._training_keras_metrics + self._test_keras_metrics
         }
+
+    @staticmethod
+    def hyperparameters() -> Set[str]:
+        """List of the hyperparameters name used by the trainer."""
+        return {"learning_rate", "latent_vector_size"}
 
     def _validate_models(
         self, input_dimension: Tuple[int, int, int], latent_vector_size: int
@@ -286,44 +279,3 @@ class AnoGAN(Trainer):
             )
         )
         tf.print("--------------------------------")
-
-
-class AnoGANMNIST(AnoGAN):
-    input_dimension: Tuple[int, int, int] = (28, 28, 1)
-
-    def __init__(
-        self,
-        dataset: AnomalyDetectionDataset,
-        hps: Dict,
-        summary_writer: tf.summary.SummaryWriter,
-    ):
-        super().__init__(
-            dataset=dataset,
-            use_generic_architecture=False,  # Model Architectures will be manually initialized
-            input_dimension=self.input_dimension,  # Unused
-            filters=0,  # Unused
-            hps=hps,
-            summary_writer=summary_writer,
-        )
-        print("Initializing AnoGANMNIST (hardcoded architecture) Trainer")
-        self.discriminator = AnoGANMNISTAssembler.assemble_discriminator()
-        self.generator = AnoGANMNISTAssembler.assemble_generator(
-            input_dimension=hps["latent_vector_size"]
-        )
-        self._validate_models(self.input_dimension, hps["latent_vector_size"])
-
-    def train_mnist(
-        self,
-        epochs: int,
-    ) -> None:
-        """
-        Train AnoGAN on MNIST dataset with one abnormal class.
-
-        Args:
-            epochs: Number of epochs.
-        """
-        self.train(
-            dataset=self._dataset.train_normal,
-            epochs=epochs,
-            test_dataset=self._dataset.test_normal,
-        )

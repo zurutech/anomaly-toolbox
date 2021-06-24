@@ -1,7 +1,8 @@
 """Trainer for the DeScarGAN model."""
 
 import json
-from typing import Dict, Tuple
+from pathlib import Path
+from typing import Dict, Set, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -18,24 +19,23 @@ class DeScarGAN(Trainer):
     def __init__(
         self,
         dataset: AnomalyDetectionDataset,
-        input_shape: Tuple[int, int, int],
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
+        log_dir: Path,
     ):
         """Initialize DeScarGAN Trainer."""
-        super().__init__(dataset, hps=hps, summary_writer=summary_writer)
+        super().__init__(
+            dataset, hps=hps, summary_writer=summary_writer, log_dir=log_dir
+        )
 
         # Data info
         self._ill_label = dataset.anomalous_label
         self._healthy_label = dataset.normal_label
 
         # Models
-        self.generator = Generator(
-            ill_label=self._ill_label, n_channels=input_shape[-1]
-        )
-        self.discriminator = Discriminator(
-            ill_label=self._ill_label, n_channels=input_shape[-1]
-        )
+        depth = tf.shape(next(iter(dataset.train.take(1)))[0])[-1]
+        self.generator = Generator(ill_label=self._ill_label, n_channels=depth)
+        self.discriminator = Discriminator(ill_label=self._ill_label, n_channels=depth)
 
         # Optimizers
         self.g_optimizer = k.optimizers.Adam(
@@ -78,14 +78,10 @@ class DeScarGAN(Trainer):
         # Constants
         self._zero = tf.constant(0.0)
 
-    def _validate_models(self, input_shape: Tuple[int, int, int]):
-        fake_batch_size = (1,) + input_shape
-        inputs = [tf.zeros(fake_batch_size), tf.zeros((1,))]
-        self.generator(inputs)
-        self.discriminator(inputs)
-
-        self.generator.summary()
-        self.discriminator.summary()
+    @staticmethod
+    def hyperparameters() -> Set[str]:
+        """List of the hyperparameters name used by the trainer."""
+        return {"learning_rate"}
 
     @staticmethod
     def clip_by_norm_handle_none(grad, clip_norm):
@@ -242,12 +238,13 @@ class DeScarGAN(Trainer):
             current_accuracy = self.accuracy.result().numpy()
             tf.print("Binary accuracy on validation set: ", current_accuracy)
             if best_accuracy < current_accuracy:
+                base_path = log_dir / "results" / "best"
                 self.generator.save(
-                    "results/descargan/best/generator",
+                    str(base_path / "generator"),
                     overwrite=True,
                     include_optimizer=False,
                 )
-                with open("results/descargan/best/accuracy.json", "w") as fp:
+                with open(base_path / "accuracy.json", "w") as fp:
                     json.dump(
                         {
                             "value": float(current_accuracy),
@@ -561,8 +558,6 @@ if __name__ == "__main__":
         epochs = 50
         batch_size = 30
 
-        # input_shape = (64, 64, 1)
-        input_shape = (64, 64, 3)  # 3 = surface cracks
         step_log_frequency = 50
         hps = {"learning_rate": hp.HParam("learning_rate", hp.Discrete([1e-4]))}
 
@@ -572,7 +567,7 @@ if __name__ == "__main__":
         dataset.configure(
             anomalous_label=anomalous_label,  # ignored if datset = SurfaceCracks
             batch_size=batch_size,
-            new_size=input_shape[:-1],
+            new_size=(64, 64),
             output_range=(-1.0, 1.0),  # generator has a tanh in output
             shuffle_buffer_size=20000,
             cache=True,
@@ -581,7 +576,7 @@ if __name__ == "__main__":
         summary_writer = tf.summary.create_file_writer(log_dir)
         for lr in hps["learning_rate"].domain.values:
             hparams = {"learning_rate": lr}
-            trainer = DeScarGAN(dataset, input_shape, hparams, summary_writer)
+            trainer = DeScarGAN(dataset, hparams, summary_writer)
             trainer.train(
                 batch_size=batch_size,
                 epochs=epochs,

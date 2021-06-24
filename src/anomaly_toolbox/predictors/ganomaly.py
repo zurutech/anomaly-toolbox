@@ -1,10 +1,10 @@
-from typing import Type, Tuple, List
+from typing import List, Tuple, Type
 
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 
-from anomaly_toolbox.models import GANomalyGenerator
+from anomaly_toolbox.models.ganomaly import GANomalyGenerator
 
 
 class GANomalyPredictor:
@@ -45,7 +45,7 @@ class GANomalyPredictor:
         z, z_hat = tf.squeeze(z), tf.squeeze(z_hat)
 
         # a_score: [batch, 1]
-        a_score = self.comput_anomaly_score(z, z_hat)
+        a_score = self.compute_anomaly_score(z, z_hat)
 
         return a_score, y
 
@@ -64,14 +64,14 @@ class GANomalyPredictor:
         z, z_hat = tf.squeeze(z), tf.squeeze(z_hat)
 
         # a_score: [batch, 1]
-        a_score = GANomalyPredictor.comput_anomaly_score(z, z_hat)
+        a_score = GANomalyPredictor.compute_anomaly_score(z, z_hat)
         if return_score_only:
             return a_score
         else:
             return x_hat, z_hat, z, a_score
 
     @staticmethod
-    def comput_anomaly_score(encoded_input, encoded_generated):
+    def compute_anomaly_score(encoded_input, encoded_generated):
         anomaly_score = tf.reduce_mean(
             tf.math.squared_difference(encoded_input, encoded_generated), axis=1
         )

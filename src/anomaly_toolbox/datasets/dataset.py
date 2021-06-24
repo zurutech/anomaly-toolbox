@@ -22,6 +22,8 @@ class AnomalyDetectionDataset(abc.ABC):
         self._train = None
         self._test = None
 
+        self._channels = 1
+
         self._anomalous_label = tf.constant(1)
         self._normal_label = tf.constant(0)
 
@@ -48,6 +50,13 @@ class AnomalyDetectionDataset(abc.ABC):
             clip_value_min=new_min,
             clip_value_max=new_max,
         )
+
+    @property
+    def channels(self) -> int:
+        """The last dimension of the elements in the dataset.
+        e.g. 3 if the dataset is a dataset of RGB images or 1
+        if they are grayscale."""
+        return self._channels
 
     @property
     def anomalous_label(self) -> tf.Tensor:
