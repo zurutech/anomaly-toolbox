@@ -248,7 +248,13 @@ class DeScarGAN(Trainer):
                     include_optimizer=False,
                 )
                 with open("results/descargan/best/accuracy.json", "w") as fp:
-                    json.dump({"value": float(current_accuracy)}, fp)
+                    json.dump(
+                        {
+                            "value": float(current_accuracy),
+                            "threshold": float(threshold.numpy()),
+                        },
+                        fp,
+                    )
 
                 best_accuracy = current_accuracy
 
