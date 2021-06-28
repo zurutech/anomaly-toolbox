@@ -37,7 +37,7 @@ class Generator(k.Model):
         """Forward pass.
         Args:
             inputs: input batch
-            training: toogle the model status from training to inference.
+            training: toggle the model status from training to inference.
         Returns:
             The generated output in [-1,1].
         """
