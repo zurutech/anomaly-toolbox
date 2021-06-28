@@ -120,7 +120,7 @@ class AnoGAN(Trainer):
                 reconstructions=training_reconstructions[-1][:batch_size],
                 summary_writer=self._summary_writer,
                 step=step,
-                epochs=epoch,
+                epoch=epoch,
                 d_loss_metric=self.epoch_d_loss_avg,
                 g_loss_metric=self.epoch_g_loss_avg,
                 max_images_to_log=batch_size,
@@ -133,7 +133,7 @@ class AnoGAN(Trainer):
             if test_dataset:
                 _, _ = self.test_phase(
                     test_dataset=test_dataset,
-                    epochs=epoch,
+                    epoch=epoch,
                     step=step,
                 )
             # Reset metrics or the data will keep accruing becoming an average of ALL the epcohs
@@ -168,7 +168,7 @@ class AnoGAN(Trainer):
                 reconstructions=testing_reconstructions[0][:batch_size],
                 summary_writer=self._summary_writer,
                 step=step,
-                epochs=epoch,
+                epoch=epoch,
                 d_loss_metric=self.test_d_loss_avg,
                 g_loss_metric=self.test_g_loss_avg,
                 max_images_to_log=batch_size,
