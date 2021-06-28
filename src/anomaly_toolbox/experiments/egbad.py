@@ -56,7 +56,6 @@ class EGBADExperiment(Experiment):
         )
 
         trainer.train(
-            dataset=dataset.train_normal,
             epoch=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
             test_dataset=dataset.test,

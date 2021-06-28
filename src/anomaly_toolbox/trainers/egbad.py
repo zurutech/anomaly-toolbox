@@ -91,7 +91,6 @@ class EGBAD(Trainer):
 
     def train(
         self,
-        dataset: tf.data.Dataset,
         epoch: int,
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
@@ -99,7 +98,7 @@ class EGBAD(Trainer):
         for epoch in range(epoch):
             training_data, training_reconstructions, training_generated = [], [], []
             batch_size = None
-            for batch in dataset:
+            for batch in self._dataset.train:
                 if not batch_size:
                     batch_size = tf.shape(batch[0])[0]
                 # Perform the train step
