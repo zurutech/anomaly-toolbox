@@ -25,7 +25,7 @@ class AnoGANExperiment(Experiment):
         self._hps = hparam_parser(
             hparams_path,
             "anogan",
-            self.hyperparameters().union(AnoGAN.hyperparameters()),
+            list(self.hyperparameters().union(AnoGAN.hyperparameters())),
         )
 
     metrics: List[hp.Metric] = [
