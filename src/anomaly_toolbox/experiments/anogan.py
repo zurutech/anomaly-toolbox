@@ -21,21 +21,11 @@ class AnoGANExperiment(Experiment):
     def __init__(self, hparams_path: Path, log_dir: Path):
         super().__init__(hparams_path, log_dir)
 
-        # List of hyperparameters names (to get from JSON)
-        self._hparams_path = hparams_path
-        self._hyperparameters_names = [
-            "anomalous_label",
-            "epochs",
-            "batch_size",
-            "optimizer",
-            "learning_rate",
-            "shuffle_buffer_size",
-            "latent_vector_size",
-        ]
-
         # Get the hyperparameters
         self._hps = hparam_parser(
-            self._hparams_path, "anogan", self._hyperparameters_names
+            hparams_path,
+            "anogan",
+            self.hyperparameters().union(AnoGAN.hyperparameters()),
         )
 
     metrics: List[hp.Metric] = [
@@ -57,29 +47,16 @@ class AnoGANExperiment(Experiment):
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
-            shuffle_buffer_size=hps["shuffle_buffer_size"],
-        )
-        trainer = AnoGAN(
-            dataset=dataset,
-            hps=hps,
-            summary_writer=summary_writer,
-        )
-        trainer.train_mnist(
-            epochs=hps["epochs"],
-        )
-
-        dataset.configure(
-            anomalous_label=hps["anomalous_label"],
-            batch_size=hps["batch_size"],
-            new_size=input_shape[:-1],
+            new_size=(28, 28),
             output_range=(-1.0, 1.0),  # generator has a tanh in output
             shuffle_buffer_size=hps["shuffle_buffer_size"],
             cache=True,
         )
-        summary_writer = tf.summary.create_file_writer(str(log_dir))
-        trainer = AnoGAN(dataset, input_shape, hps, summary_writer)
+
+        trainer = AnoGAN(dataset, hps, summary_writer, log_dir)
         trainer.train(
-            batch_size=hps["batch_size"],
+            dataset=dataset.train_normal,
             epochs=hps["epochs"],
-            step_log_frequency=step_log_frequency,
+            step_log_frequency=hps["step_log_frequency"],
+            test_dataset=dataset.test,
         )

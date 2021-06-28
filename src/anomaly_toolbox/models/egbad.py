@@ -1,43 +1,36 @@
 """BiGAN Architecture Implementation as used in EGBAD."""
 
-from typing import Tuple
-
-import tensorflow as tf
 import tensorflow.keras as k
 
 KERNEL_INITIALIZER = k.initializers.RandomNormal(mean=0.0, stddev=0.02)
 ALMOST_ONE = k.initializers.RandomNormal(mean=1.0, stddev=0.02)
 
 
-class EGBADBiGANAssembler:
-    """Assembler providind BiGAN primitive Encoder and Decoder architectures."""
+class Encoder(k.Model):
+    """
+    Assemble the EGBAD BiGAN Encoder as a :obj:`tf.keras.Model`.
+    """
 
-    @staticmethod
-    def assemble_encoder(
-        input_dimension: Tuple[int, int, int],
-        filters: int,
-        latent_space_dimension: int = 128,
-        l2_penalty: float = 0.0,
-    ) -> k.Model:
+    def __init__(self, n_channels: int = 3, latent_space_dimension: int = 128):
         """
-        Assemble the EGBAD BiGAN Encoder as a :obj:`tf.keras.Model` using Keras Functional API.
+        Assemble the EGBAD BiGAN Encoder as a :obj:`tf.keras.Model`.
 
         Note:
-            This is designed to work with any image size ina fully-convolutional way.
+            This is designed to work with any image size in a fully-convolutional way.
 
         Args:
-            input_dimension: Tuple[int, int, int] representing the shape of the input data.
-            filters: Filters of the first convolution.
-            latent_space_dimension: Dimension (along the depth) of the resulting encoded represention.
-            l2_penalty: l2 regularization strenght
-
+            n_channels: depth of the input image
+            latent_space_dimension: Dimension (along the depth) of the resulting
+                                    encoded represention.
         Return:
             The assembled model.
         """
-        input_layer = k.layers.Input(shape=input_dimension)
+        super().__init__()
 
-        # -----------
-        # Construct the the first block
+        l2_penalty = 0.0
+        filters = 32
+
+        input_layer = k.layers.Input(shape=(32, 32, n_channels))
         x = k.layers.Conv2D(
             filters,
             kernel_size=4,
@@ -49,12 +42,9 @@ class EGBADBiGANAssembler:
         )(input_layer)
         x = k.layers.LeakyReLU(alpha=0.2)(x)
 
-        # -----------
-        # Construct the various intermediate blocks
-        channel_size = input_dimension[0] // 2
-        while channel_size > 4:
-            filters = filters * 2
-            channel_size = channel_size // 2
+        side = 16
+        while side > 4:
+            filters *= 2
             x = k.layers.Conv2D(
                 filters,
                 kernel_size=4,
@@ -71,9 +61,8 @@ class EGBADBiGANAssembler:
                 epsilon=1e-5,
             )(x)
             x = k.layers.LeakyReLU(alpha=0.2)(x)
+            side //= 2
 
-        # -----------
-        # Construct the final layer
         x = k.layers.Conv2D(
             latent_space_dimension,
             kernel_size=4,
@@ -83,31 +72,39 @@ class EGBADBiGANAssembler:
             kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
-        encoder = k.Model(input_layer, x, name="bigan_encoder")
-        return encoder
+        self._encoder = k.Model(input_layer, x, name="bigan_encoder")
 
-    @staticmethod
-    def assemble_decoder(
-        input_dimension: int,
-        output_dimension: Tuple[int, int, int],
-        filters: int,
-        l2_penalty: float = 0.0,
-    ) -> k.Model:
+    def call(self, inputs, training=False):
+        return self._encoder(inputs, training=training)
+
+
+class Decoder(k.Model):
+    """
+    Assemble the EGBAD BiGAN Decoder as a :obj:`tf.keras.Model`.
+    """
+
+    def __init__(self, n_channels: int = 3, latent_space_dimension: int = 128):
         """
-        Assemble EGBAD-BiGAN Decoder as a :obj:`tf.keras.Model` using the Functional API.
+        Assemble the EGBAD BiGAN Decoder as a :obj:`tf.keras.Model`.
+
+        Note:
+            This is designed to work with any image size in a fully-convolutional way.
 
         Args:
-            input_dimension: Dimension of the Latent vector produced by the Encoder.
-            output_dimension: Desired dimension of the output vector.
-            filters: Filters of the first transposed convolution.
-
-        Returns:
+            n_channels: depth of the output image.
+            latent_space_dimension: Dimension (along the depth) of the resulting
+                                    encoded represention.
+        Return:
             The assembled model.
         """
-        input_layer = k.layers.Input(shape=(1, 1, input_dimension))
+        super().__init__()
 
-        # -----------
-        # Construct the the first block
+        filters = 32
+        l2_penalty = 0.0
+        output_dimension = (32, 32, n_channels)
+
+        input_layer = k.layers.Input(shape=(1, 1, latent_space_dimension))
+
         x = k.layers.Conv2DTranspose(
             filters,
             kernel_size=4,
@@ -119,8 +116,6 @@ class EGBADBiGANAssembler:
         )(input_layer)
         x = k.layers.ReLU()(x)
 
-        # -----------
-        # Construct the various intermediate blocks
         vector_size = 4
         while vector_size < output_dimension[0] // 2:
             vector_size = vector_size * 2
@@ -142,7 +137,6 @@ class EGBADBiGANAssembler:
             )(x)
             x = k.layers.ReLU()(x)
 
-        # -----------
         # Construct the final layer
         x = k.layers.Conv2DTranspose(
             output_dimension[-1],
@@ -154,21 +148,36 @@ class EGBADBiGANAssembler:
             kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
-        decoder = k.Model(input_layer, x, name="bigan_decoder")
-        return decoder
+        self._decoder = k.Model(input_layer, x, name="bigan_decoder")
 
-    @staticmethod
-    def assemble_discriminator(
-        input_dimension: Tuple[int, int, int],
-        filters: int,
-        latent_space_dimension: int = 128,
-        l2_penalty: float = 0.0,
-    ) -> k.Model:
-        encoder = EGBADBiGANAssembler.assemble_encoder(
-            input_dimension, filters, latent_space_dimension, l2_penalty
-        )
+    def call(self, inputs, training=False):
+        return self._decoder(inputs, training=training)
+
+
+class Discriminator(k.Model):
+    """
+    Assemble the EGBAD BiGAN Discriminator as a :obj:`tf.keras.Model`.
+    """
+
+    def __init__(self, n_channels: int = 3, latent_space_dimension: int = 128):
+        """
+        Assemble the EGBAD BiGAN Discriminator as a :obj:`tf.keras.Model`.
+
+        Note:
+            This is designed to work with any image size in a fully-convolutional way.
+
+        Args:
+            n_channels: depth of the output image.
+            latent_space_dimension: Dimension (along the depth) of the resulting
+                                    encoded represention.
+        Return:
+            The assembled model.
+        """
+        super().__init__()
+        input_dimension = (28, 28, n_channels)
+
+        encoder = Encoder(n_channels, latent_space_dimension)
         input_layer = k.layers.Input(shape=input_dimension)
-
         input_encoding = k.layers.Input(shape=(1, 1, latent_space_dimension))
         d_z = k.layers.Conv2D(
             128,
@@ -205,9 +214,11 @@ class EGBADBiGANAssembler:
             feature
         )  # 1x1x1
 
-        discriminator = k.Model(
+        self._discriminator = k.Model(
             inputs=[input_layer, input_encoding],
             outputs=[out, feature],
             name="bigan_discriminator",
         )
-        return discriminator
+
+    def call(self, inputs, training=False):
+        return self._discriminator(inputs, training=training)

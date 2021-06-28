@@ -1,5 +1,6 @@
 """Trainer for the AnoGAN model."""
 
+from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
 
 import tensorflow as tf
@@ -18,17 +19,19 @@ class AnoGAN(Trainer):
     def __init__(
         self,
         dataset: AnomalyDetectionDataset,
-        input_dimension: Tuple[int, int, int],
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
+        log_dir: Path,
     ):
         """Initialize AnoGAN Trainer."""
-        super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
+        super().__init__(
+            dataset=dataset, hps=hps, summary_writer=summary_writer, log_dir=log_dir
+        )
 
         # Models
         self.discriminator = Discriminator()
         self.generator = Generator(input_dimension=hps["latent_vector_size"])
-        self._validate_models(input_dimension, hps["latent_vector_size"])
+        self._validate_models((28, 28, 1), hps["latent_vector_size"])
 
         # Optimizers
         self.optimizer_g = keras.optimizers.Adam(
@@ -117,7 +120,7 @@ class AnoGAN(Trainer):
                 reconstructions=training_reconstructions[-1][:batch_size],
                 summary_writer=self._summary_writer,
                 step=step,
-                epoch=epoch,
+                epochs=epoch,
                 d_loss_metric=self.epoch_d_loss_avg,
                 g_loss_metric=self.epoch_g_loss_avg,
                 max_images_to_log=batch_size,
@@ -130,7 +133,7 @@ class AnoGAN(Trainer):
             if test_dataset:
                 _, _ = self.test_phase(
                     test_dataset=test_dataset,
-                    epoch=epoch,
+                    epochs=epoch,
                     step=step,
                 )
             # Reset metrics or the data will keep accruing becoming an average of ALL the epcohs
@@ -165,7 +168,7 @@ class AnoGAN(Trainer):
                 reconstructions=testing_reconstructions[0][:batch_size],
                 summary_writer=self._summary_writer,
                 step=step,
-                epoch=epoch,
+                epochs=epoch,
                 d_loss_metric=self.test_d_loss_avg,
                 g_loss_metric=self.test_g_loss_avg,
                 max_images_to_log=batch_size,

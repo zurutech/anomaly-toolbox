@@ -1,5 +1,6 @@
 """Trainer for the BiGAN model used in EGBAD."""
 
+from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
 
 import tensorflow as tf
@@ -8,7 +9,7 @@ from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.losses import egbad as losses
-from anomaly_toolbox.models.egbad import EGBADBiGANAssembler
+from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
 
@@ -18,29 +19,21 @@ class EGBAD(Trainer):
     def __init__(
         self,
         dataset: AnomalyDetectionDataset,
-        input_dimension: Tuple[int, int, int],
-        filters: int,
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
+        log_dir: Path,
     ):
         """Initialize EGBAD-BiGAN Networks."""
-        print("Initializing EGBAD-BiGAN Trainer")
-        super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
+        super().__init__(
+            dataset=dataset, hps=hps, summary_writer=summary_writer, log_dir=log_dir
+        )
 
         # Models
-        self.discriminator = EGBADBiGANAssembler.assemble_discriminator(
-            input_dimension, filters, self._hps["latent_vector_size"]
-        )
-        self.generator = EGBADBiGANAssembler.assemble_decoder(
-            input_dimension=self._hps["latent_vector_size"],
-            output_dimension=input_dimension,
-            filters=filters,
-        )
-        self.encoder = EGBADBiGANAssembler.assemble_encoder(
-            input_dimension=input_dimension,
-            filters=filters,
-            latent_space_dimension=self._hps["latent_vector_size"],
-        )
+
+        n_channels = tf.shape(next(iter(dataset.train.take(1)))[0])[-1]
+        self.discriminator = Discriminator(n_channels, self._hps["latent_vector_size"])
+        self.encoder = Encoder(n_channels, self._hps["latent_vector_size"])
+        self.generator = Decoder(n_channels, self._hps["latent_vector_size"])
 
         fake_batch_size = (1,) + input_dimension
         fake_latent_vector = (1,) + (1, 1, self._hps["latent_vector_size"])
@@ -121,7 +114,7 @@ class EGBAD(Trainer):
                 training_generated.append(x_hat)
                 training_reconstructions.append(xz_hat)
 
-                if step % step_log_frequency == 0:
+                if tf.equal(tf.math.mod(step, step_log_frequency), 0):
                     with self._summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
 
@@ -134,9 +127,7 @@ class EGBAD(Trainer):
                             learning_rate,
                         )
                     )
-            # |--------------------|
-            # | Epoch-wise logging |
-            # |--------------------|
+            # Log at the end of every epoch
             self.log(
                 input_data=training_data[-1][:batch_size],
                 reconstructions=training_reconstructions[-1][:batch_size],
@@ -151,9 +142,7 @@ class EGBAD(Trainer):
                 training=True,
             )
 
-            # |-----------------------|
-            # | Perform the test step |
-            # |-----------------------|
+            # Test if test dataset is present
             if test_dataset:
                 _, _, _ = self.test_phase(
                     test_dataset=test_dataset,
@@ -337,8 +326,6 @@ class EGBAD(Trainer):
                 max_outputs=max_images_to_log,
                 step=step,
             )
-        # -----
-        print("--------------------------------")
         print(
             "{}: {:03d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f},".format(
                 "EPOCH" if training else "TEST",
@@ -347,25 +334,4 @@ class EGBAD(Trainer):
                 g_loss_metric.result(),
                 e_loss_metric.result(),
             )
-        )
-
-    # | ----------------- |
-    # | Trainer functions |
-    # | ----------------- |
-
-    def train_mnist(
-        self,
-        epoch: int,
-    ) -> None:
-        """
-        Train EGBAD on MNIST dataset with one abnormal class.
-
-        Args:
-            epoch: Number of epochs.
-        """
-
-        self.train(
-            dataset=self._dataset.train_normal,
-            epoch=epoch,
-            test_dataset=self._dataset.test_normal,
         )

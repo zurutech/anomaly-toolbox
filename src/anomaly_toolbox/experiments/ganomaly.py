@@ -22,7 +22,9 @@ class GANomalyExperiment(Experiment):
 
         # Get the hyperparameters
         self._hps = hparam_parser(
-            self._hparams_path, "ganomaly", self._hyperparameters_names
+            self._hparams_path,
+            "ganomaly",
+            self.hyperparameters().union(GANomaly.hyperparameters()),
         )
 
     def experiment(

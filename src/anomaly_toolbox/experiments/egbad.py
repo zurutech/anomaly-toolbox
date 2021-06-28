@@ -20,20 +20,11 @@ class EGBADExperiment(Experiment):
     def __init__(self, hparams_path: Path, log_dir: Path):
         super().__init__(hparams_path, log_dir)
 
-        # List of hyperparameters names (to get from JSON)
-        self._hyperparameters_names = [
-            "anomalous_label",
-            "epochs",
-            "batch_size",
-            "optimizer",
-            "learning_rate",
-            "shuffle_buffer_size",
-            "latent_vector_size",
-        ]
-
         # Get the hyperparameters
         self._hps = hparam_parser(
-            self._hparams_path, "egbad", self._hyperparameters_names
+            hparams_path,
+            "egbad",
+            self.hyperparameters().union(EGBAD.hyperparameters()),
         )
 
     def experiment(
@@ -58,12 +49,14 @@ class EGBADExperiment(Experiment):
 
         trainer = EGBAD(
             dataset=dataset,
-            input_dimension=self.input_dimension,
-            filters=self.filters,
             hps=hps,
             summary_writer=summary_writer,
+            log_dir=log_dir,
         )
 
-        trainer.train_mnist(
-            epoch=hps["epochs"],
+        trainer.train(
+            dataset=dataset.train_normal,
+            epochs=hps["epochs"],
+            step_log_frequency=hps["step_log_frequency"],
+            test_dataset=dataset.test,
         )
