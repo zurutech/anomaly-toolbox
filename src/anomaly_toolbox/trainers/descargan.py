@@ -238,7 +238,7 @@ class DeScarGAN(Trainer):
             current_accuracy = self.accuracy.result().numpy()
             tf.print("Binary accuracy on validation set: ", current_accuracy)
             if best_accuracy < current_accuracy:
-                base_path = log_dir / "results" / "best"
+                base_path = self._log_dir / "results" / "best"
                 self.generator.save(
                     str(base_path / "generator"),
                     overwrite=True,
