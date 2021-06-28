@@ -40,7 +40,7 @@ class AnoGANExperiment(Experiment):
         Args:
             hps: dictionary with the parameters to use for the current run.
             log_dir: where to store the tensorboard logs.
-            dataset: the datset to use for model trainign and evaluation.
+            dataset: the dataset to use for model training and evaluation.
         """
         summary_writer = tf.summary.create_file_writer(str(log_dir))
 
