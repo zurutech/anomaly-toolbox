@@ -17,11 +17,11 @@ class DeScarGAN(Trainer):
     """DeScarGAN Trainer."""
 
     def __init__(
-            self,
-            dataset: AnomalyDetectionDataset,
-            hps: Dict,
-            summary_writer: tf.summary.SummaryWriter,
-            log_dir: Path,
+        self,
+        dataset: AnomalyDetectionDataset,
+        hps: Dict,
+        summary_writer: tf.summary.SummaryWriter,
+        log_dir: Path,
     ):
         """Initialize DeScarGAN Trainer."""
         super().__init__(
@@ -97,10 +97,10 @@ class DeScarGAN(Trainer):
 
     # @tf.function
     def train(
-            self,
-            batch_size: int,
-            epochs: int,
-            step_log_frequency: int = 100,
+        self,
+        batch_size: int,
+        epochs: int,
+        step_log_frequency: int = 100,
     ):
         """Train the DeScarGAN generator and discriminator."""
 
@@ -124,8 +124,8 @@ class DeScarGAN(Trainer):
 
                 # step -1 because in train_step self.d_optimizer.iterations has been incremented
                 if tf.math.equal(
-                        tf.math.mod(step - 1, step_log_frequency),
-                        tf.constant(0, tf.int64),
+                    tf.math.mod(step - 1, step_log_frequency),
+                    tf.constant(0, tf.int64),
                 ):
                     with self._summary_writer.as_default():
                         x, y = batch
@@ -208,7 +208,7 @@ class DeScarGAN(Trainer):
 
             # reconstruction <= threshold => normal data (label 0)
             for x, y in self._dataset.test_normal.skip(10).concatenate(
-                    self._dataset.test_anomalous
+                self._dataset.test_anomalous
             ):  # skip first 10 used for threshold computation
                 self.accuracy.update_state(
                     y_true=y,
@@ -264,7 +264,7 @@ class DeScarGAN(Trainer):
             self._reset_keras_metrics()
 
     def gradient_penalty(
-            self, x: tf.Tensor, x_gen: tf.Tensor, labels: tf.Tensor
+        self, x: tf.Tensor, x_gen: tf.Tensor, labels: tf.Tensor
     ) -> tf.Tensor:
         """Compute gradient penalty: L2(grad - 1)^2.
         Args:
@@ -288,8 +288,8 @@ class DeScarGAN(Trainer):
 
     # @tf.function
     def train_step(
-            self,
-            inputs: Tuple[tf.Tensor, tf.Tensor],
+        self,
+        inputs: Tuple[tf.Tensor, tf.Tensor],
     ):
         """Single training step.
         Args:
@@ -342,10 +342,10 @@ class DeScarGAN(Trainer):
                 )
                 d_loss_real_healthy = -tf.reduce_mean(d_healthy) * percentage_healthy
                 d_loss_classification_healthy = (
-                        self._classification_loss(
-                            y_true=healthy_labels, y_pred=d_healthy_pred
-                        )
-                        * percentage_healthy
+                    self._classification_loss(
+                        y_true=healthy_labels, y_pred=d_healthy_pred
+                    )
+                    * percentage_healthy
                 )
             else:
                 d_loss_classification_healthy = self._zero
@@ -358,8 +358,8 @@ class DeScarGAN(Trainer):
                 )
                 d_loss_real_ill = -tf.reduce_mean(d_ill) * percentage_ill
                 d_loss_classification_ill = (
-                        self._classification_loss(y_true=ill_labels, y_pred=d_ill_pred)
-                        * percentage_ill
+                    self._classification_loss(y_true=ill_labels, y_pred=d_ill_pred)
+                    * percentage_ill
                 )
             else:
                 d_loss_classification_ill = self._zero
@@ -368,7 +368,7 @@ class DeScarGAN(Trainer):
             # Total loss on real images
             d_loss_real = d_loss_real_ill + d_loss_real_healthy
             d_loss_classification = (
-                    d_loss_classification_ill + d_loss_classification_healthy
+                d_loss_classification_ill + d_loss_classification_healthy
             )
 
             # Generate fake images:
@@ -376,18 +376,18 @@ class DeScarGAN(Trainer):
             noise_variance = tf.constant(0.05)
             if tf.not_equal(percentage_healthy, self._zero):
                 x_healthy_noisy = (
-                        x_healthy
-                        + tf.random.uniform(tf.shape(x_healthy), dtype=tf.float32)
-                        * noise_variance
+                    x_healthy
+                    + tf.random.uniform(tf.shape(x_healthy), dtype=tf.float32)
+                    * noise_variance
                 )
                 x_fake_healthy = self.generator(
                     [x_healthy_noisy, healthy_labels], training=True
                 )
                 # Add noise to generated and real images - used for the losses
                 x_fake_healthy_noisy = (
-                        x_fake_healthy
-                        + tf.random.uniform(tf.shape(x_fake_healthy), dtype=tf.float32)
-                        * noise_variance
+                    x_fake_healthy
+                    + tf.random.uniform(tf.shape(x_fake_healthy), dtype=tf.float32)
+                    * noise_variance
                 )
                 # Train with fake noisy images
                 (d_on_fake_healthy, _) = self.discriminator(
@@ -409,17 +409,17 @@ class DeScarGAN(Trainer):
 
             if tf.not_equal(percentage_ill, self._zero):
                 x_ill_noisy = (
-                        x_ill
-                        + tf.random.uniform(tf.shape(x_ill), dtype=tf.float32)
-                        * noise_variance
+                    x_ill
+                    + tf.random.uniform(tf.shape(x_ill), dtype=tf.float32)
+                    * noise_variance
                 )
                 x_fake_ill = self.generator([x_ill_noisy, ill_labels], training=True)
 
                 # Add noise to generated and real images - used for the losses
                 x_fake_ill_noisy = (
-                        x_fake_ill
-                        + tf.random.uniform(tf.shape(x_fake_ill), dtype=tf.float32)
-                        * noise_variance
+                    x_fake_ill
+                    + tf.random.uniform(tf.shape(x_fake_ill), dtype=tf.float32)
+                    * noise_variance
                 )
 
                 # Train with fake noisy images
@@ -439,8 +439,8 @@ class DeScarGAN(Trainer):
                 x_ill_noisy = self._zero
 
             d_loss_fake = (
-                    tf.reduce_mean(d_on_fake_healthy) * percentage_healthy
-                    + tf.reduce_mean(d_on_fake_ill) * percentage_ill
+                tf.reduce_mean(d_on_fake_healthy) * percentage_healthy
+                + tf.reduce_mean(d_on_fake_ill) * percentage_ill
             )
 
             # Gradient penalty to improve discriminator training stability
@@ -448,18 +448,18 @@ class DeScarGAN(Trainer):
 
             # Sum all the losses and compute the discriminator loss
             d_loss = (
-                    self._d_lambda_real * d_loss_real
-                    + self._d_lambda_fake * d_loss_fake
-                    + self._d_lambda_classification * d_loss_classification
-                    + self._d_lambda_gradient_penalty * d_loss_gp
+                self._d_lambda_real * d_loss_real
+                + self._d_lambda_fake * d_loss_fake
+                + self._d_lambda_classification * d_loss_classification
+                + self._d_lambda_gradient_penalty * d_loss_gp
             )
 
             # Train the Generator ever self._generator_training_steps performed by the discriminator
             if tf.equal(
-                    tf.math.mod(
-                        self.d_optimizer.iterations, self._generator_training_steps
-                    ),
-                    0,
+                tf.math.mod(
+                    self.d_optimizer.iterations, self._generator_training_steps
+                ),
+                0,
             ):
                 # D output reduction is needed because the output is batch_size, w, h, D
 
@@ -496,7 +496,7 @@ class DeScarGAN(Trainer):
                     g_reconstruction_loss_ill = self._zero
 
                 g_classification_loss = (
-                        g_classification_loss_ill + g_classification_loss_healthy
+                    g_classification_loss_ill + g_classification_loss_healthy
                 )
 
                 # Adversarial loss
@@ -509,15 +509,15 @@ class DeScarGAN(Trainer):
 
                 # Reconstruction loss
                 g_reconstruction_loss = (
-                        g_reconstruction_loss_healthy + g_reconstruction_loss_ill
+                    g_reconstruction_loss_healthy + g_reconstruction_loss_ill
                 )
 
                 # Total generator loss
                 g_loss = (
-                        self._g_lambda_fake * g_loss_fake
-                        + self._g_lambda_reconstruction * g_reconstruction_loss
-                        + self._g_lambda_identity * g_identity_loss
-                        + self._g_lambda_classification * g_classification_loss
+                    self._g_lambda_fake * g_loss_fake
+                    + self._g_lambda_reconstruction * g_reconstruction_loss
+                    + self._g_lambda_identity * g_identity_loss
+                    + self._g_lambda_classification * g_classification_loss
                 )
             else:
                 g_loss = self._zero
@@ -530,16 +530,16 @@ class DeScarGAN(Trainer):
         )
 
         if tf.equal(
-                tf.cast(
-                    tf.math.mod(
-                        self.d_optimizer.iterations - 1,
-                        # -1 because at the previous line with d_opt.apply_gradients
-                        # the counter increased
-                        self._generator_training_steps,
-                    ),
-                    tf.int32,
+            tf.cast(
+                tf.math.mod(
+                    self.d_optimizer.iterations - 1,
+                    # -1 because at the previous line with d_opt.apply_gradients
+                    # the counter increased
+                    self._generator_training_steps,
                 ),
-                tf.constant(0, dtype=tf.int32),
+                tf.int32,
+            ),
+            tf.constant(0, dtype=tf.int32),
         ):
             g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
             # Gradient clipping
@@ -550,44 +550,3 @@ class DeScarGAN(Trainer):
         del tape
 
         return d_loss, g_loss, x_hat
-
-
-if __name__ == "__main__":
-    from anomaly_toolbox.datasets import MNIST, SurfaceCracks
-
-
-    def _main():
-        anomalous_label = 2
-        epochs = 50
-        batch_size = 30
-
-        step_log_frequency = 50
-        hps = {"learning_rate": hp.HParam("learning_rate", hp.Discrete([1e-4]))}
-
-        dataset = SurfaceCracks()
-        # dataset = MNIST()
-
-        dataset.configure(
-            anomalous_label=anomalous_label,  # ignored if datset = SurfaceCracks
-            batch_size=batch_size,
-            new_size=(64, 64),
-            output_range=(-1.0, 1.0),  # generator has a tanh in output
-            shuffle_buffer_size=20000,
-            cache=True,
-        )
-	# TODO: to delete cane?
-        log_dir = "cane"
-        summary_writer = tf.summary.create_file_writer(log_dir)
-        for lr in hps["learning_rate"].domain.values:
-            hparams = {"learning_rate": lr}
-            trainer = DeScarGAN(dataset, hparams, summary_writer)
-            trainer.train(
-                batch_size=batch_size,
-                epochs=epochs,
-                step_log_frequency=step_log_frequency,
-            )
-            trainer.discriminator.save(log_dir + "/discriminator")
-            trainer.generator.save(log_dir + "/generator")
-
-
-    _main()
