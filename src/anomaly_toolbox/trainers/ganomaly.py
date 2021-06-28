@@ -1,6 +1,7 @@
 """Trainer for the GANomaly model."""
 
 from typing import Dict, Optional, Set, Tuple
+from pathlib import Path
 
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -25,18 +26,31 @@ class GANomaly(Trainer):
         self,
         dataset: AnomalyDetectionDataset,
         input_dimension: Tuple[int, int, int],
-        filters: int,
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
+        log_dir: Path,
     ):
         """Initialize GANomaly Networks."""
         print("Initializing GANomaly Trainer")
-        super().__init__(dataset=dataset, hps=hps, summary_writer=summary_writer)
+        super().__init__(
+            dataset=dataset, hps=hps, summary_writer=summary_writer, log_dir=log_dir
+        )
 
         # Models
-        self.discriminator = GANomalyDiscriminator(input_dimension, filters)
+        # self.discriminator = GANomalyDiscriminator(input_dimension, filters)
+        # self.generator = GANomalyGenerator(
+        #     input_dimension, filters, self._hps["latent_vector_size"]
+        # )
+
+        filters = 64
+
+        self.discriminator = GANomalyDiscriminator(
+            input_dimension=input_dimension, filters=filters
+        )
         self.generator = GANomalyGenerator(
-            input_dimension, filters, self._hps["latent_vector_size"]
+            input_dimension=input_dimension,
+            filters=filters,
+            latent_space_dimension=self._hps["latent_vector_size"],
         )
         fake_batch_size = (1,) + input_dimension
         self.discriminator(tf.zeros(fake_batch_size))
@@ -84,11 +98,16 @@ class GANomaly(Trainer):
     @staticmethod
     def hyperparameters() -> Set[str]:
         """List of the hyperparameters name used by the trainer."""
-        return {"learning_rate", "latent_vector_size"}
+        return {
+            "learning_rate",
+            "latent_vector_size",
+            "adversarial_loss_weight",
+            "contextual_loss_weight",
+            "enc_loss_weight",
+        }
 
     def train(
         self,
-        dataset: tf.data.Dataset,
         epoch: int,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
@@ -99,7 +118,7 @@ class GANomaly(Trainer):
         for epoch in range(epoch):
             training_data, training_reconstructions = [], []
             batch_size = None
-            for batch in dataset:
+            for batch in self._dataset.train:
                 if not batch_size:
                     batch_size = tf.shape(batch[0])[0]
                 # Perform the train step
