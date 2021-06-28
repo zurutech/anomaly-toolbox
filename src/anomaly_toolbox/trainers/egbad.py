@@ -19,6 +19,7 @@ class EGBAD(Trainer):
     def __init__(
         self,
         dataset: AnomalyDetectionDataset,
+        input_dimension: Tuple[int, int, int],
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
         log_dir: Path,
@@ -29,7 +30,6 @@ class EGBAD(Trainer):
         )
 
         # Models
-
         n_channels = tf.shape(next(iter(dataset.train.take(1)))[0])[-1]
         self.discriminator = Discriminator(n_channels, self._hps["latent_vector_size"])
         self.encoder = Encoder(n_channels, self._hps["latent_vector_size"])
@@ -82,7 +82,12 @@ class EGBAD(Trainer):
     @staticmethod
     def hyperparameters() -> Set[str]:
         """List of the hyperparameters name used by the trainer."""
-        return {"learning_rate", "latent_vector_size"}
+        return {
+            "learning_rate",
+            "latent_vector_size",
+            "shuffle_buffer_size",
+            "step_log_frequency",
+        }
 
     def train(
         self,
