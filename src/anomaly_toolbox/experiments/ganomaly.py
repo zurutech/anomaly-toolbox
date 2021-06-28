@@ -24,7 +24,7 @@ class GANomalyExperiment(Experiment):
         self._hps = hparam_parser(
             self._hparams_path,
             "ganomaly",
-            self.hyperparameters().union(GANomaly.hyperparameters()),
+            list(self.hyperparameters().union(GANomaly.hyperparameters())),
         )
 
     def experiment(
@@ -38,19 +38,20 @@ class GANomalyExperiment(Experiment):
         """
 
         summary_writer = tf.summary.create_file_writer(str(log_dir))
+        new_size = (32, 32)
 
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
-            new_size=(32, 32),
+            new_size=new_size,
             shuffle_buffer_size=hps["shuffle_buffer_size"],
         )
         trainer = GANomaly(
             dataset=dataset,
-            input_dimension=self.input_dimension,
-            filters=self.filters,
+            input_dimension=(new_size[0], new_size[1], dataset.channels),
             hps=hps,
             summary_writer=summary_writer,
+            log_dir=log_dir,
         )
         trainer.train(
             epoch=hps["epochs"],
