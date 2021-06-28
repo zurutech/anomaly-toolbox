@@ -161,7 +161,7 @@ class AnomalyDetectionDataset(abc.ABC):
         """Given a dataset, configure it applying the chain of
         map, filter, shuffle and all the needed methods of the tf.data.Dataset.
         Args:
-            dataset: the input dataset with elmenents (x,y), where x is an image
+            dataset: the input dataset with elements (x,y), where x is an image
                      and y the scalar label.
             new_size: (H,W) of the output image. NEAREST_NEIGHBOR interpolation is used.
             batch_size: the dataset batch size
