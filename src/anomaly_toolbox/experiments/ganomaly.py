@@ -54,6 +54,7 @@ class GANomalyExperiment(Experiment):
             log_dir=log_dir,
         )
         trainer.train(
+            dataset=dataset.train_normal,
             epoch=hps["epochs"],
             adversarial_loss_weight=hps["adversarial_loss_weight"],
             contextual_loss_weight=hps["contextual_loss_weight"],
