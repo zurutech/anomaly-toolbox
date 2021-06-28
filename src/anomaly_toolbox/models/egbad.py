@@ -149,10 +149,6 @@ class Decoder(k.Model):
             activation="tanh",
         )(x)
 
-        print("ciao")
-
-
-
         self._decoder = k.Model(input_layer, x, name="bigan_decoder")
 
     def call(self, inputs, training=False):
@@ -180,7 +176,6 @@ class Discriminator(k.Model):
         """
         super().__init__()
         input_dimension = (28, 28, n_channels)
-        # input_dimension = (32, 32, 1)
 
         encoder = Encoder(n_channels, latent_space_dimension)
         input_layer = k.layers.Input(shape=input_dimension)
