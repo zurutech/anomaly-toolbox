@@ -24,7 +24,7 @@ class EGBADExperiment(Experiment):
         self._hps = hparam_parser(
             hparams_path,
             "egbad",
-            self.hyperparameters().union(EGBAD.hyperparameters()),
+            list(self.hyperparameters().union(EGBAD.hyperparameters())),
         )
 
     def experiment(
@@ -36,19 +36,20 @@ class EGBADExperiment(Experiment):
             log_dir: where to store the tensorboard logs.
             dataset: the dataset to use for model training and evaluation.
         """
-
         summary_writer = tf.summary.create_file_writer(str(log_dir))
+        new_size = (28, 28)
 
         # Create the dataset
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
-            new_size=(32, 32),
+            new_size=new_size,
             shuffle_buffer_size=hps["shuffle_buffer_size"],
         )
 
         trainer = EGBAD(
             dataset=dataset,
+            input_dimension=(new_size[0], new_size[1], dataset.channels),
             hps=hps,
             summary_writer=summary_writer,
             log_dir=log_dir,
@@ -56,7 +57,7 @@ class EGBADExperiment(Experiment):
 
         trainer.train(
             dataset=dataset.train_normal,
-            epochs=hps["epochs"],
+            epoch=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
             test_dataset=dataset.test,
         )
