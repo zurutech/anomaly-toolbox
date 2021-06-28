@@ -40,7 +40,7 @@ from anomaly_toolbox.hps import grid_search
     "--dataset",
     help=(
         "The dataset to use. Can be a ready to use dataset, or a .py file "
-        "that implements the AnomalyDectionDataset interface"
+        "that implements the AnomalyDetectionDataset interface"
     ),
     type=str,
     required=True,
@@ -91,7 +91,7 @@ def main(
             )()
         except (ModuleNotFoundError, AttributeError, TypeError):
             logging.error(
-                "Dataset %s is not among the availables: %s",
+                "Dataset %s is not among the available: %s",
                 dataset,
                 ",".join(available_datasets.__ALL__),
             )
@@ -129,7 +129,7 @@ def main(
             )(hps_path, log_dir)
         except (ModuleNotFoundError, AttributeError, TypeError):
             logging.error(
-                "Experiment %s is not among the availables: %s",
+                "Experiment %s is not among the available: %s",
                 experiment,
                 ",".join(available_experiments.__ALL__),
             )
