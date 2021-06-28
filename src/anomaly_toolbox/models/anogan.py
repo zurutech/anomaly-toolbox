@@ -72,7 +72,7 @@ class Discriminator(k.Model):
         """Forward pass.
         Args:
             inputs: input batch
-            training: toogle the model status from training to inference.
+            training: toggle the model status from training to inference.
         Returns:
             The discriminator decision (single neuron, linear activation).
         """
