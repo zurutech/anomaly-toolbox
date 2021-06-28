@@ -24,7 +24,7 @@ class DeScarGANExperiment(Experiment):
         self._hps = hparam_parser(
             hparams_path,
             "descargan",
-            self.hyperparameters().union(DeScarGAN.hyperparameters()),
+            list(self.hyperparameters().union(DeScarGAN.hyperparameters())),
         )
 
     def experiment(
@@ -36,6 +36,8 @@ class DeScarGANExperiment(Experiment):
             log_dir: where to store the tensorboard logs.
             dataset: the dataset to use for model training and evaluation.
         """
+
+        # TODO: summary_writer never used?
         summary_writer = tf.summary.create_file_writer(str(log_dir / "summaries"))
 
         dataset.configure(
