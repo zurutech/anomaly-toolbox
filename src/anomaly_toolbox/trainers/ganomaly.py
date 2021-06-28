@@ -108,6 +108,7 @@ class GANomaly(Trainer):
 
     def train(
         self,
+        dataset: tf.data.Dataset,
         epoch: int,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
@@ -118,7 +119,7 @@ class GANomaly(Trainer):
         for epoch in range(epoch):
             training_data, training_reconstructions = [], []
             batch_size = None
-            for batch in self._dataset.train:
+            for batch in dataset:
                 if not batch_size:
                     batch_size = tf.shape(batch[0])[0]
                 # Perform the train step
