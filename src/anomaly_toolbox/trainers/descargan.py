@@ -575,6 +575,7 @@ if __name__ == "__main__":
             shuffle_buffer_size=20000,
             cache=True,
         )
+	# TODO: to delete cane?
         log_dir = "cane"
         summary_writer = tf.summary.create_file_writer(log_dir)
         for lr in hps["learning_rate"].domain.values:
