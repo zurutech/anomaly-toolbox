@@ -9,9 +9,10 @@ class Generator(k.Model):
     Input: 1x1x input_dimension.
     """
 
-    def __init__(self, input_dimension: int):
+    def __init__(self, n_channels: int = 3, input_dimension: int = 128):
         """Generator model.
         Args:
+            n_channels: depth of the input image
             input_dimension: the dimension of the latent vector.
         """
 
@@ -29,7 +30,7 @@ class Generator(k.Model):
         x = k.layers.ReLU()(x)
 
         x = k.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
-        x = k.layers.Conv2D(1, (5, 5), padding="same")(x)
+        x = k.layers.Conv2D(n_channels, (5, 5), padding="same")(x)
         x = k.layers.Activation("tanh")(x)
         self._model = k.Model(input_layer, x, name="anogan_mnist_generator")
 
@@ -47,10 +48,14 @@ class Generator(k.Model):
 class Discriminator(k.Model):
     """Discriminator model. Expects a batch of 28x28x1 input images."""
 
-    def __init__(self):
+    def __init__(self, n_channels: int = 3):
+        """
+        Args:
+            n_channels: depth of the input image
+        """
         super().__init__()
 
-        input_layer = k.layers.Input(shape=(28, 28, 1))
+        input_layer = k.layers.Input(shape=(28, 28, n_channels))
 
         x = k.layers.Conv2D(64, (5, 5), padding="same")(input_layer)
         x = k.layers.LeakyReLU(0.2)(x)

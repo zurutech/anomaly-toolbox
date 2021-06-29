@@ -1,7 +1,7 @@
 """BiGAN Architecture Implementation as used in EGBAD."""
 
-import tensorflow.keras as k
 import tensorflow as tf
+import tensorflow.keras as k
 
 KERNEL_INITIALIZER = k.initializers.RandomNormal(mean=0.0, stddev=0.02)
 ALMOST_ONE = k.initializers.RandomNormal(mean=1.0, stddev=0.02)
@@ -139,7 +139,7 @@ class Decoder(k.Model):
             epsilon=1e-5,
         )(x)
         x = k.layers.Conv2DTranspose(
-            1,
+            n_channels,
             kernel_size=4,
             strides=2,
             padding="same",

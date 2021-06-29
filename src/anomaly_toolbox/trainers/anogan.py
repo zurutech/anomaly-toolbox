@@ -29,9 +29,12 @@ class AnoGAN(Trainer):
         )
 
         # Models
-        self.discriminator = Discriminator()
-        self.generator = Generator(input_dimension=hps["latent_vector_size"])
-        self._validate_models((28, 28, 1), hps["latent_vector_size"])
+        depth = tf.shape(next(iter(dataset.train.take(1)))[0])[-1]
+        self.discriminator = Discriminator(n_channels=depth)
+        self.generator = Generator(
+            n_channels=depth, input_dimension=hps["latent_vector_size"]
+        )
+        self._validate_models((28, 28, depth), hps["latent_vector_size"])
 
         # Optimizers
         self.optimizer_g = keras.optimizers.Adam(
