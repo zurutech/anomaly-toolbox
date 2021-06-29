@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Dict, Optional, Set, Tuple
+import json
 
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -60,6 +61,7 @@ class EGBAD(Trainer):
         self.epoch_d_loss_avg = tf.keras.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = tf.keras.metrics.Mean(name="epoch_generator_loss")
         self.epoch_e_loss_avg = tf.keras.metrics.Mean(name="epoch_encoder_loss")
+        self.accuracy = keras.metrics.BinaryAccuracy(name="binary_accuracy")
         self._training_keras_metrics = [
             self.epoch_d_loss_avg,
             self.epoch_g_loss_avg,
@@ -76,8 +78,14 @@ class EGBAD(Trainer):
         ]
         self.keras_metrics = {
             metric.name: metric
-            for metric in self._training_keras_metrics + self._test_keras_metrics
+            for metric in self._training_keras_metrics
+            + self._test_keras_metrics
+            + [self.accuracy]
         }
+
+        # Outside of the keras_metrics because it's used to compute the running
+        # mean and not as a metric
+        self._mean = keras.metrics.Mean()
 
     @staticmethod
     def hyperparameters() -> Set[str]:
@@ -90,6 +98,9 @@ class EGBAD(Trainer):
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
     ):
+
+        best_accuracy = -1.0
+
         for epoch in range(epoch):
             training_data, training_reconstructions, training_generated = [], [], []
             batch_size = None
@@ -126,28 +137,119 @@ class EGBAD(Trainer):
                             learning_rate,
                         )
                     )
-            # Log at the end of every epoch
-            self.log(
-                input_data=training_data[-1][:batch_size],
-                reconstructions=training_reconstructions[-1][:batch_size],
-                generated=training_generated[-1][:batch_size],
-                summary_writer=self._summary_writer,
-                step=step,
-                epoch=epoch,
-                d_loss_metric=self.epoch_d_loss_avg,
-                g_loss_metric=self.epoch_g_loss_avg,
-                e_loss_metric=self.epoch_e_loss_avg,
-                max_images_to_log=batch_size,
-                training=True,
+            # Epoch end
+
+            # ## Model selection ## #
+
+            # Use the mean in calculating the threshold for this epoch
+            self._mean.reset_states()
+
+            # Get a subset of the test data and calculate the mean error between the real data x
+            # and the generated data (after being encoded)
+            subset = self._dataset.test_normal.take(10)
+            for x, y in subset:
+                self._mean.update_state(
+                    tf.reduce_mean(
+                        tf.math.abs(
+                            self.generator(
+                                self.encoder(x, training=False), training=False
+                            )
+                            - x
+                        )
+                    )
+                )
+
+            # The threshold calculated is used to understand how well the current
+            # encoder/generator are doing well
+            threshold = self._mean.result()
+            tf.print(
+                "Reconstruction error on unseen subset (normal samples only): ",
+                threshold,
             )
 
-            # Test if test dataset is present
-            if test_dataset:
-                _, _, _ = self.test_phase(
-                    test_dataset=test_dataset,
-                    epoch=epoch,
-                    step=step,
+            # reconstruction <= threshold => normal data (label 0)
+            # skip first 10 used for threshold computation
+
+            for x, y in self._dataset.test_normal.skip(10).concatenate(
+                self._dataset.test_anomalous
+            ):
+                self.accuracy.update_state(
+                    y_true=y,
+                    y_pred=tf.cast(
+                        # reconstruction > threshold => anomalous (label 1 = cast(True))
+                        # invoke the generator always with the normal label, since that's
+                        # what we suppose to receive in input (and the threshold has been found
+                        # using data that comes only from the normal distribution)
+                        tf.math.greater(
+                            tf.reduce_mean(
+                                tf.math.abs(
+                                    self.generator(
+                                        self.encoder(
+                                            x,
+                                            training=False,
+                                        ),
+                                        training=False,
+                                    )
+                                    - x
+                                ),
+                                axis=[1, 2, 3],
+                            ),
+                            threshold,
+                        ),
+                        tf.int32,
+                    ),
                 )
+            current_accuracy = self.accuracy.result().numpy()
+            tf.print("Binary accuracy on validation set: ", current_accuracy)
+            if best_accuracy < current_accuracy:
+                base_path = self._log_dir / "results" / "best"
+                self.generator.save(
+                    str(base_path / "generator"),
+                    overwrite=True,
+                    include_optimizer=False,
+                )
+                self.encoder.save(
+                    str(base_path / "encoder"),
+                    overwrite=True,
+                    include_optimizer=False,
+                )
+                with open(base_path / "accuracy.json", "w") as fp:
+                    json.dump(
+                        {
+                            "value": float(current_accuracy),
+                            "threshold": float(threshold.numpy()),
+                        },
+                        fp,
+                    )
+
+                best_accuracy = current_accuracy
+
+            with self._summary_writer.as_default():
+                tf.summary.scalar("accuracy", current_accuracy, step=step)
+
+            # # Log at the end of every epoch
+            # self.log(
+            #     input_data=training_data[-1][:batch_size],
+            #     reconstructions=training_reconstructions[-1][:batch_size],
+            #     generated=training_generated[-1][:batch_size],
+            #     summary_writer=self._summary_writer,
+            #     step=step,
+            #     epoch=epoch,
+            #     d_loss_metric=self.epoch_d_loss_avg,
+            #     g_loss_metric=self.epoch_g_loss_avg,
+            #     e_loss_metric=self.epoch_e_loss_avg,
+            #     max_images_to_log=batch_size,
+            #     training=True,
+            # )
+            #
+            # # Test if test dataset is present
+            # if test_dataset:
+            #     _, _, _ = self.test_phase(
+            #         test_dataset=test_dataset,
+            #         epoch=epoch,
+            #         step=step,
+            #     )
+
             # Reset metrics or the data will keep accruing becoming an average of ALL the epochs
             self._reset_keras_metrics()
 
