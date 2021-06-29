@@ -6,7 +6,6 @@ from typing import Dict, Set, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as k
-from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.models.descargan import Discriminator, Generator
