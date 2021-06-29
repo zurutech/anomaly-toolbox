@@ -82,12 +82,7 @@ class EGBAD(Trainer):
     @staticmethod
     def hyperparameters() -> Set[str]:
         """List of the hyperparameters name used by the trainer."""
-        return {
-            "learning_rate",
-            "latent_vector_size",
-            "shuffle_buffer_size",
-            "step_log_frequency",
-        }
+        return {"learning_rate", "latent_vector_size"}
 
     def train(
         self,
