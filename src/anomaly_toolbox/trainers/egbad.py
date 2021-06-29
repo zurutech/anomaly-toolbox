@@ -148,7 +148,7 @@ class EGBAD(Trainer):
                     epoch=epoch,
                     step=step,
                 )
-            # Reset metrics or the data will keep accruing becoming an average of ALL the epcohs
+            # Reset metrics or the data will keep accruing becoming an average of ALL the epochs
             self._reset_keras_metrics()
 
     def test_phase(
