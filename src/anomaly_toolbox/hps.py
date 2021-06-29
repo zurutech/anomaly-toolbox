@@ -1,10 +1,10 @@
 """Common utilities for HPS search."""
 
 import itertools
-from typing import List
-from pathlib import Path
 import json
 import sys
+from pathlib import Path
+from typing import List
 
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
@@ -24,13 +24,13 @@ def hparam_parser(
     Returns:
         A list of hyperparameters.
     """
-    with open(hparams_path) as f:
-        data = json.load(f)
+    with open(hparams_path) as fp:
+        data = json.load(fp)
 
     # Get the experiment name
     experiment_data = data[experiment]
 
-    # FIll the hparam list
+    # Fill the hparam list
     hps: List[hp.HParam] = []
     for hparam_name in hyperparameters_names:
 

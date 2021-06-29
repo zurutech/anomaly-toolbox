@@ -11,11 +11,9 @@ GANomalyDiscriminator -> Built on top of the Encoder Primitive
 from typing import Any, Tuple
 
 import tensorflow as tf
-import tensorflow.keras as keras
+import tensorflow.keras as k
 
-__ALL__ = ["GANomalyAssembler", "GANomalyGenerator", "GANomalyDiscriminator"]
-
-KERNEL_INITIALIZER = keras.initializers.RandomNormal(mean=0.0, stddev=0.02)
+KERNEL_INITIALIZER = k.initializers.RandomNormal(mean=0.0, stddev=0.02)
 
 # TODO: Add support for extra layers
 class GANomalyAssembler:
@@ -26,7 +24,7 @@ class GANomalyAssembler:
         input_dimension: Tuple[int, int, int],
         filters: int,
         latent_space_dimension: int = 100,
-    ) -> tf.keras.Model:
+    ) -> k.Model:
         """
         Assemble the GANomaly Encoder as a :obj:`tf.keras.Model` using Keras Functional API.
 
@@ -41,10 +39,10 @@ class GANomalyAssembler:
         Return:
             The assembled model.
         """
-        input_layer = keras.layers.Input(shape=input_dimension)
+        input_layer = k.layers.Input(shape=input_dimension)
 
         # Construct the the first block
-        x = keras.layers.Conv2D(
+        x = k.layers.Conv2D(
             filters,
             kernel_size=4,
             strides=2,
@@ -52,13 +50,13 @@ class GANomalyAssembler:
             use_bias=False,
             kernel_initializer=KERNEL_INITIALIZER,
         )(input_layer)
-        x = keras.layers.LeakyReLU(alpha=0.2)(x)
+        x = k.layers.LeakyReLU(alpha=0.2)(x)
 
         # Construct the various intermediate blocks
         channel_size = input_dimension[0] // 2
         while channel_size > 4:
             filters *= 2
-            x = keras.layers.Conv2D(
+            x = k.layers.Conv2D(
                 filters,
                 kernel_size=4,
                 strides=2,
@@ -66,13 +64,13 @@ class GANomalyAssembler:
                 use_bias=False,
                 kernel_initializer=KERNEL_INITIALIZER,
             )(x)
-            x = keras.layers.BatchNormalization()(x)
-            x = keras.layers.LeakyReLU(alpha=0.2)(x)
+            x = k.layers.BatchNormalization()(x)
+            x = k.layers.LeakyReLU(alpha=0.2)(x)
 
             channel_size //= 2
 
         # Construct the final layer
-        x = keras.layers.Conv2D(
+        x = k.layers.Conv2D(
             latent_space_dimension,
             kernel_size=4,
             strides=1,
@@ -81,7 +79,7 @@ class GANomalyAssembler:
             kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
-        encoder = tf.keras.Model(input_layer, x, name="ganomaly_encoder")
+        encoder = k.Model(input_layer, x, name="ganomaly_encoder")
         return encoder
 
     @staticmethod
@@ -89,7 +87,7 @@ class GANomalyAssembler:
         input_dimension: int,
         output_dimension: Tuple[int, int, int],
         filters: int,
-    ) -> tf.keras.Model:
+    ) -> k.Model:
         """
         Assemble GANomaly Decoder as a :obj:`tf.keras.Model` using the Functional API.
 
@@ -101,10 +99,10 @@ class GANomalyAssembler:
         Returns:
             The assembled model.
         """
-        input_layer = keras.layers.Input(shape=(1, 1, input_dimension))
+        input_layer = k.layers.Input(shape=(1, 1, input_dimension))
 
         # Construct the the first block
-        x = keras.layers.Conv2DTranspose(
+        x = k.layers.Conv2DTranspose(
             filters,
             kernel_size=4,
             strides=1,
@@ -112,14 +110,14 @@ class GANomalyAssembler:
             use_bias=False,
             kernel_initializer=KERNEL_INITIALIZER,
         )(input_layer)
-        x = keras.layers.ReLU()(x)
+        x = k.layers.ReLU()(x)
 
         # Construct the various intermediate blocks
         vector_size = 4
         while vector_size < output_dimension[0] // 2:
             vector_size = vector_size * 2
             filters = filters * 2
-            x = keras.layers.Conv2DTranspose(
+            x = k.layers.Conv2DTranspose(
                 filters,
                 kernel_size=4,
                 strides=2,
@@ -127,11 +125,11 @@ class GANomalyAssembler:
                 use_bias=False,
                 kernel_initializer=KERNEL_INITIALIZER,
             )(x)
-            x = keras.layers.BatchNormalization()(x)
-            x = keras.layers.ReLU()(x)
+            x = k.layers.BatchNormalization()(x)
+            x = k.layers.ReLU()(x)
 
         # Construct the final layer
-        x = keras.layers.Conv2DTranspose(
+        x = k.layers.Conv2DTranspose(
             output_dimension[-1],
             kernel_size=4,
             strides=2,
@@ -141,11 +139,11 @@ class GANomalyAssembler:
             kernel_initializer=KERNEL_INITIALIZER,
         )(x)
 
-        decoder = tf.keras.Model(input_layer, x, name="ganomaly_decoder")
+        decoder = k.Model(input_layer, x, name="ganomaly_decoder")
         return decoder
 
 
-class GANomalyDiscriminator(keras.Model):
+class GANomalyDiscriminator(k.Model):
     """Implementation of the GANomaly Discriminator using :class:`GANomalyAssembler`."""
 
     def __init__(
@@ -160,11 +158,11 @@ class GANomalyDiscriminator(keras.Model):
             input_dimension, filters, latent_space_dimension
         ).layers
 
-        self.features_extractor = keras.Sequential(
+        self.features_extractor = k.Sequential(
             layers[:-1], name="ganomaly_discriminator_features_extractor"
         )
-        self.classifier = keras.Sequential(
-            [layers[-1], keras.layers.Flatten()],
+        self.classifier = k.Sequential(
+            [layers[-1], k.layers.Flatten()],
             name="ganomaly_discriminator_classifier",
         )
 
@@ -175,7 +173,7 @@ class GANomalyDiscriminator(keras.Model):
         return classification, features
 
 
-class GANomalyGenerator(keras.Model):
+class GANomalyGenerator(k.Model):
     """Implementation of the GANomaly Generator using :class:`GANomalyAssembler`."""
 
     def __init__(self, input_dimension, filters, latent_space_dimension):

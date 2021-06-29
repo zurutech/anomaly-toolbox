@@ -83,6 +83,9 @@ class SurfaceCracks(AnomalyDetectionDataset):
             )
         )
 
+        # RGB dataset
+        self._channels = 3
+
     def _download_and_extract(self):
         """Download and extract the dataset."""
 

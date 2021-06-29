@@ -22,6 +22,8 @@ class AnomalyDetectionDataset(abc.ABC):
         self._train = None
         self._test = None
 
+        self._channels = 1
+
         self._anomalous_label = tf.constant(1)
         self._normal_label = tf.constant(0)
 
@@ -48,6 +50,13 @@ class AnomalyDetectionDataset(abc.ABC):
             clip_value_min=new_min,
             clip_value_max=new_max,
         )
+
+    @property
+    def channels(self) -> int:
+        """The last dimension of the elements in the dataset.
+        e.g. 3 if the dataset is a dataset of RGB images or 1
+        if they are grayscale."""
+        return self._channels
 
     @property
     def anomalous_label(self) -> tf.Tensor:
@@ -152,7 +161,7 @@ class AnomalyDetectionDataset(abc.ABC):
         """Given a dataset, configure it applying the chain of
         map, filter, shuffle and all the needed methods of the tf.data.Dataset.
         Args:
-            dataset: the input dataset with elmenents (x,y), where x is an image
+            dataset: the input dataset with elements (x,y), where x is an image
                      and y the scalar label.
             new_size: (H,W) of the output image. NEAREST_NEIGHBOR interpolation is used.
             batch_size: the dataset batch size

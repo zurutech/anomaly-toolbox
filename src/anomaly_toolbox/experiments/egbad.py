@@ -1,4 +1,4 @@
-"""All EGBAD experiments."""
+"""EGBAD experiments suite."""
 
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -6,69 +6,57 @@ from typing import Dict, List, Tuple
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
 
-from anomaly_toolbox.experiments.interface import Experiment
-from anomaly_toolbox.trainers import EGBAD
-from anomaly_toolbox.datasets import MNIST
+from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
+from anomaly_toolbox.experiments.experiment import Experiment
 from anomaly_toolbox.hps import hparam_parser
+from anomaly_toolbox.trainers import EGBAD
 
 
-__ALL__ = ["EGBADExperimentMNIST"]
-
-
-class EGBADExperimentMNIST(Experiment):
+class EGBADExperiment(Experiment):
     """
-    EGBAD experiment on MNIST.
+    EGBAD experiment.
     """
 
     def __init__(self, hparams_path: Path, log_dir: Path):
         super().__init__(hparams_path, log_dir)
 
-        # List of hyperparameters names (to get from JSON)
-        self._hyperparameters_names = [
-            "anomalous_label",
-            "epochs",
-            "batch_size",
-            "optimizer",
-            "learning_rate",
-            "shuffle_buffer_size",
-            "latent_vector_size",
-        ]
-
         # Get the hyperparameters
         self._hps = hparam_parser(
-            self._hparams_path, "egbad", self._hyperparameters_names
+            hparams_path,
+            "egbad",
+            list(self.hyperparameters().union(EGBAD.hyperparameters())),
         )
 
-    input_dimension: Tuple[int, int, int] = (32, 32, 1)
-    filters: int = 64
-
-    metrics: List[hp.Metric] = [
-        hp.Metric("test_epoch_d_loss", display_name="Discriminator Loss"),
-        hp.Metric("test_epoch_g_loss", display_name="Generator Loss"),
-        hp.Metric("test_epoch_e_loss", display_name="Encoder Loss"),
-    ]
-
-    def experiment_run(self, hps: Dict, log_dir: Path):
-        """Perform a single run of the model."""
+    def experiment(
+        self, hps: Dict, log_dir: Path, dataset: AnomalyDetectionDataset
+    ) -> None:
+        """Experiment execution - architecture specific.
+        Args:
+            hps: dictionary with the parameters to use for the current run.
+            log_dir: where to store the tensorboard logs.
+            dataset: the dataset to use for model training and evaluation.
+        """
         summary_writer = tf.summary.create_file_writer(str(log_dir))
+        new_size = (28, 28)
 
         # Create the dataset
-        mnist_dataset = MNIST()
-        mnist_dataset.configure(
+        dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
-            new_size=(32, 32),
+            new_size=new_size,
             shuffle_buffer_size=hps["shuffle_buffer_size"],
         )
 
         trainer = EGBAD(
-            dataset=mnist_dataset,
-            input_dimension=self.input_dimension,
-            filters=self.filters,
+            dataset=dataset,
+            input_dimension=(new_size[0], new_size[1], dataset.channels),
             hps=hps,
             summary_writer=summary_writer,
+            log_dir=log_dir,
         )
 
-        trainer.train_mnist(
+        trainer.train(
             epoch=hps["epochs"],
+            step_log_frequency=hps["step_log_frequency"],
+            test_dataset=dataset.test,
         )

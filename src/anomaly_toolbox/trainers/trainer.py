@@ -1,6 +1,8 @@
 """Trainer generic structure."""
 
-from typing import Dict
+from abc import abstractmethod
+from pathlib import Path
+from typing import Dict, Set
 
 import tensorflow as tf
 
@@ -18,16 +20,21 @@ class Trainer:
         dataset: AnomalyDetectionDataset,
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
+        log_dir: Path,
     ):
         """
         Trainer ctor.
 
         Args:
             dataset: The anomaly detection dataset.
-            hps: all the hyperparameters needed.
+            hps: instance of hyperparameters. Configure the trainer with this set of values.
+                 NOTE: the hyperparameter supported and needed by the training procedure are
+                 available in the `hyperparameters` property.
             summary_writer: The tf.summary.SummaryWriter object to keep track of the training
-            procedure.
+                            procedure.
+            log_dir: the directory to use when saving something without using the summary writer.
         """
+        self._log_dir = log_dir
         self._dataset = dataset
         self._hps = hps
         self._summary_writer = summary_writer
@@ -41,6 +48,11 @@ class Trainer:
     @keras_metrics.setter
     def keras_metrics(self, metrics: Dict[str, tf.keras.metrics.Metric]):
         self._keras_metrics = metrics
+
+    @staticmethod
+    @abstractmethod
+    def hyperparameters() -> Set[str]:
+        """List of the hyperparameters name used by the trainer."""
 
     def _reset_keras_metrics(self) -> None:
         """

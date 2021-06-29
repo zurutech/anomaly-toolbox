@@ -1,181 +1,85 @@
-"""Several Implementation from AnoGAN paper."""
-
-from typing import Any, List, Tuple
+"""Implementation of the 28x28 input resolution models of AnoGAN."""
 
 import tensorflow as tf
-import tensorflow.keras as keras
-
-__ALL__ = ["AnoGANAssembler", "AnoGANMNISTAssembler"]
+import tensorflow.keras as k
 
 
-class AnoGANAssembler:
-    @staticmethod
-    def assemble_generator(
-        input_dimension: int,
-        output_dimension: Tuple[int, int, int],
-        filters: int,
-    ) -> tf.keras.Model:
-        """
-        AnoGAN Generator implementation as a :obj:`tf.keras.Model`.
+class Generator(k.Model):
+    """Generator in fully convolutional fashion.
+    Input: 1x1x input_dimension.
+    """
 
+    def __init__(self, n_channels: int = 3, input_dimension: int = 128):
+        """Generator model.
         Args:
-            input_dimension: Dimension of the input latent (noise) vector.
-            output_dimension: Desired dimension of the output vector.
-            filters: Filters of the first transposed convolution.
-
+            n_channels: depth of the input image
+            input_dimension: the dimension of the latent vector.
         """
-        input_layer = keras.layers.Input(shape=(1, 1, input_dimension))
 
-        # -----------
-        # Construct the zeroth block
-        # TODO: Add l2 regularizer
-        x = keras.layers.Dense(4 * 4 * filters * 2)(input_layer)
-        x = keras.layers.ReLU()(x)
-        x = keras.layers.Reshape((-1, 4, 4, filters * 2))(x)
+        super().__init__()
+        input_layer = k.layers.Input(shape=(1, 1, input_dimension))
 
-        # -----------
-        # Construct the the first block
-        x = keras.layers.Conv2DTranspose(
-            filters,
-            kernel_size=5,
-            strides=2,
-            padding="same",
-        )(x)
-        x = keras.layers.ReLU()(x)
+        x = k.layers.Dense(7 * 7 * 128)(input_layer)
+        x = k.layers.BatchNormalization()(x)
+        x = k.layers.LeakyReLU(0.2)(x)
+        x = k.layers.Reshape((7, 7, 128))(x)
 
-        # -----------
-        # Construct the various intermediate blocks
-        vector_size = 8
-        while vector_size < output_dimension[0] // 2:
-            vector_size = vector_size * 2
-            filters = filters // 2
-            x = keras.layers.Conv2DTranspose(
-                filters,
-                kernel_size=5,
-                strides=2,
-                padding="same",
-                use_bias=False,
-            )(x)
-            x = keras.layers.BatchNormalization()(x)
-            x = keras.layers.ReLU()(x)
+        x = k.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
+        x = k.layers.Conv2D(64, (2, 2), padding="same")(x)
+        x = k.layers.BatchNormalization()(x)
+        x = k.layers.ReLU()(x)
 
-        # -----------
-        # Construct the final layer
-        x = keras.layers.Conv2DTranspose(
-            output_dimension[-1],
-            kernel_size=5,
-            strides=2,
-            padding="same",
-            use_bias=False,
-            activation="tanh",
-        )(x)
+        x = k.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
+        x = k.layers.Conv2D(n_channels, (5, 5), padding="same")(x)
+        x = k.layers.Activation("tanh")(x)
+        self._model = k.Model(input_layer, x, name="anogan_mnist_generator")
 
-        generator = tf.keras.Model(input_layer, x, name="anogan_generator")
-        return generator
-
-    @staticmethod
-    def assemble_discriminator(
-        input_dimension: Tuple[int, int, int],
-        filters: int,
-    ) -> tf.keras.Model:
-        """
-        Assemble an AnoGAN discriminator implemented as a :obj:`tf.keras.Model`.
-
+    def call(self, inputs, training=False) -> tf.Tensor:
+        """Forward pass.
         Args:
-            input_dimension: dimension of the input data
-            filters: filters of the first convolution (there will be log2(channel) conv)
-
+            inputs: input batch
+            training: toggle the model status from training to inference.
+        Returns:
+            The generated output in [-1,1].
         """
-        input_layer = keras.layers.Input(shape=input_dimension)
-
-        # -----------
-        # Construct the the first block
-        x = keras.layers.Conv2D(
-            filters,
-            kernel_size=5,
-            strides=2,
-            padding="same",
-            use_bias=False,
-        )(input_layer)
-        x = keras.layers.LeakyReLU(alpha=0.2)(x)
-
-        # -----------
-        # Construct the various intermediate blocks
-        channel_size = (
-            input_dimension[0] // 2
-        )  # Actually the side of the image aka c x c x filters
-        while channel_size > 4:
-            filters = filters * 2
-            channel_size = channel_size // 2
-            x = keras.layers.Conv2D(
-                filters,
-                kernel_size=5,
-                strides=2,
-                padding="same",
-                use_bias=False,
-            )(x)
-            x = keras.layers.BatchNormalization()(x)
-            x = keras.layers.LeakyReLU(alpha=0.2)(x)
-
-        # -----------
-        # Construct the final layer
-        # x = keras.layers.Conv2D(
-        #     latent_space_dimension,
-        #     kernel_size=4,
-        #     strides=1,
-        #     padding="same",
-        #     use_bias=False,
-        # )(x)
-        features = x
-        x = keras.layers.Flatten()(features)
-        x = keras.layers.Dense(1)
-
-        encoder = tf.keras.Model(
-            input_layer, [x, features], name="anogan_discrimininator"
-        )
-        return encoder
+        return self._model(inputs, training)
 
 
-class AnoGANMNISTAssembler:
-    """Hardcoded GAN for the MNIST dataset."""
+class Discriminator(k.Model):
+    """Discriminator model. Expects a batch of 28x28x1 input images."""
 
-    @staticmethod
-    def assemble_generator(input_dimension: int) -> keras.Model:
-        input_layer = keras.layers.Input(shape=(1, 1, input_dimension))
+    def __init__(self, n_channels: int = 3):
+        """
+        Args:
+            n_channels: depth of the input image
+        """
+        super().__init__()
 
-        x = keras.layers.Dense(7 * 7 * 128)(input_layer)
-        x = keras.layers.BatchNormalization()(x)
-        x = keras.layers.LeakyReLU(0.2)(x)
-        x = keras.layers.Reshape((7, 7, 128))(x)
+        input_layer = k.layers.Input(shape=(28, 28, n_channels))
 
-        x = keras.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
-        x = keras.layers.Conv2D(64, (2, 2), padding="same")(x)
-        x = keras.layers.BatchNormalization()(x)
-        x = keras.layers.ReLU()(x)
-
-        x = keras.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same")(x)
-        x = keras.layers.Conv2D(1, (5, 5), padding="same")(x)
-        x = keras.layers.Activation("tanh")(x)
-        model = keras.Model(input_layer, x, name="anogan_mnist_generator")
-        return model
-
-    @staticmethod
-    def assemble_discriminator() -> keras.Model:
-        input_layer = keras.layers.Input(shape=(28, 28, 1))
-
-        x = keras.layers.Conv2D(64, (5, 5), padding="same")(input_layer)
-        x = keras.layers.LeakyReLU(0.2)(x)
-        features = keras.layers.MaxPool2D(pool_size=(2, 2))(x)
+        x = k.layers.Conv2D(64, (5, 5), padding="same")(input_layer)
+        x = k.layers.LeakyReLU(0.2)(x)
+        features = k.layers.MaxPool2D(pool_size=(2, 2))(x)
         # NOTE: https://github.com/tkwoo/anogan-keras/blob/master/anogan.py
 
-        x = keras.layers.Conv2D(128, (5, 5), strides=(2, 2), padding="same")(features)
-        x = keras.layers.LeakyReLU(0.2)(x)
-        x = keras.layers.MaxPool2D(pool_size=(2, 2))(x)
+        x = k.layers.Conv2D(128, (5, 5), strides=(2, 2), padding="same")(features)
+        x = k.layers.LeakyReLU(0.2)(x)
+        x = k.layers.MaxPool2D(pool_size=(2, 2))(x)
 
-        x = keras.layers.Flatten()(x)
-        x = keras.layers.Dense(1)(x)
+        x = k.layers.Flatten()(x)
+        x = k.layers.Dense(1)(x)
 
-        model = keras.Model(
+        self._model = k.Model(
             input_layer, outputs=[x, features], name="anogan_mninst_discriminator"
         )
-        return model
+
+    def call(self, inputs, training=False) -> tf.Tensor:
+        """Forward pass.
+        Args:
+            inputs: input batch
+            training: toggle the model status from training to inference.
+        Returns:
+            The discriminator decision (single neuron, linear activation).
+        """
+
+        return self._model(inputs, training)

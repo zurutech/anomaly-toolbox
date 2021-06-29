@@ -1,7 +1,7 @@
-"""All GANomaly experiments."""
+"""DeScarGAN experiment suite."""
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
@@ -9,12 +9,12 @@ from tensorboard.plugins.hparams import api as hp
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.experiments.experiment import Experiment
 from anomaly_toolbox.hps import hparam_parser
-from anomaly_toolbox.trainers import GANomaly
+from anomaly_toolbox.trainers import DeScarGAN
 
 
-class GANomalyExperiment(Experiment):
+class DeScarGANExperiment(Experiment):
     """
-    GANomaly experiment.
+    DeScarGAN experiment.
     """
 
     def __init__(self, hparams_path: Path, log_dir: Path):
@@ -22,9 +22,9 @@ class GANomalyExperiment(Experiment):
 
         # Get the hyperparameters
         self._hps = hparam_parser(
-            self._hparams_path,
-            "ganomaly",
-            list(self.hyperparameters().union(GANomaly.hyperparameters())),
+            hparams_path,
+            "descargan",
+            list(self.hyperparameters().union(DeScarGAN.hyperparameters())),
         )
 
     def experiment(
@@ -37,27 +37,21 @@ class GANomalyExperiment(Experiment):
             dataset: the dataset to use for model training and evaluation.
         """
 
-        summary_writer = tf.summary.create_file_writer(str(log_dir))
-        new_size = (32, 32)
+        # TODO: summary_writer never used?
+        summary_writer = tf.summary.create_file_writer(str(log_dir / "summaries"))
 
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
-            new_size=new_size,
+            new_size=(64, 64),
+            output_range=(-1.0, 1.0),  # generator has a tanh in output
             shuffle_buffer_size=hps["shuffle_buffer_size"],
+            cache=True,
         )
-        trainer = GANomaly(
-            dataset=dataset,
-            input_dimension=(new_size[0], new_size[1], dataset.channels),
-            hps=hps,
-            summary_writer=summary_writer,
-            log_dir=log_dir,
-        )
+        summary_writer = tf.summary.create_file_writer(str(log_dir))
+        trainer = DeScarGAN(dataset, hps, summary_writer, log_dir)
         trainer.train(
-            epoch=hps["epochs"],
-            adversarial_loss_weight=hps["adversarial_loss_weight"],
-            contextual_loss_weight=hps["contextual_loss_weight"],
-            enc_loss_weight=hps["enc_loss_weight"],
+            batch_size=hps["batch_size"],
+            epochs=hps["epochs"],
+            step_log_frequency=hps["step_log_frequency"],
         )
-        trainer.discriminator.save(str(log_dir / "discriminator"))
-        trainer.generator.save(str(log_dir / "generator"))

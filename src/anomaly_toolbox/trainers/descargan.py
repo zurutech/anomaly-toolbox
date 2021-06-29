@@ -1,6 +1,8 @@
 """Trainer for the DeScarGAN model."""
 
-from typing import Dict, Tuple
+import json
+from pathlib import Path
+from typing import Dict, Set, Tuple
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -17,24 +19,23 @@ class DeScarGAN(Trainer):
     def __init__(
         self,
         dataset: AnomalyDetectionDataset,
-        input_shape: Tuple[int, int, int],
         hps: Dict,
         summary_writer: tf.summary.SummaryWriter,
+        log_dir: Path,
     ):
         """Initialize DeScarGAN Trainer."""
-        super().__init__(dataset, hps=hps, summary_writer=summary_writer)
+        super().__init__(
+            dataset, hps=hps, summary_writer=summary_writer, log_dir=log_dir
+        )
 
         # Data info
         self._ill_label = dataset.anomalous_label
         self._healthy_label = dataset.normal_label
 
         # Models
-        self.generator = Generator(
-            ill_label=self._ill_label, n_channels=input_shape[-1]
-        )
-        self.discriminator = Discriminator(
-            ill_label=self._ill_label, n_channels=input_shape[-1]
-        )
+        depth = tf.shape(next(iter(dataset.train.take(1)))[0])[-1]
+        self.generator = Generator(ill_label=self._ill_label, n_channels=depth)
+        self.discriminator = Discriminator(ill_label=self._ill_label, n_channels=depth)
 
         # Optimizers
         self.g_optimizer = k.optimizers.Adam(
@@ -77,14 +78,10 @@ class DeScarGAN(Trainer):
         # Constants
         self._zero = tf.constant(0.0)
 
-    def _validate_models(self, input_shape: Tuple[int, int, int]):
-        fake_batch_size = (1,) + input_shape
-        inputs = [tf.zeros(fake_batch_size), tf.zeros((1,))]
-        self.generator(inputs)
-        self.discriminator(inputs)
-
-        self.generator.summary()
-        self.discriminator.summary()
+    @staticmethod
+    def hyperparameters() -> Set[str]:
+        """List of the hyperparameters name used by the trainer."""
+        return {"learning_rate"}
 
     @staticmethod
     def clip_by_norm_handle_none(grad, clip_norm):
@@ -109,9 +106,11 @@ class DeScarGAN(Trainer):
 
         step_log_frequency = tf.convert_to_tensor(step_log_frequency, dtype=tf.int64)
         epochs = tf.convert_to_tensor(epochs, dtype=tf.int32)
+
+        # TODO: batch_size never used?
         batch_size = tf.convert_to_tensor(batch_size, dtype=tf.int32)
 
-        previous_accuracy = -1.0
+        best_accuracy = -1.0
 
         for epoch in tf.range(epochs):
             for batch in self._dataset.train:
@@ -182,20 +181,35 @@ class DeScarGAN(Trainer):
             # Epoch end
 
             # Global classification (not pixel level)
-            # 1. Find the reconstruction error on the training set (normal only)
+            # 1. Find the reconstruction error on a sub-set of the validation set
+            # that WON'T be used during the score computation.
+            # Reason: https://stats.stackexchange.com/a/427468/91290
+            #
+            # "The error distribution on the training data is misleading since your
+            # training error distribution is not identical to test error distribution,
+            # due to inevitable over-fitting. Then, comparing training error
+            # distribution with future data is unjust."
+            #
             # 2. Use the threshold to classify the validation set (positive and negative)
             # 3. Compute the binary accuracy (we can use it since the dataset is perfectly balanced)
             self._mean.reset_state()
-            for x, y in self._dataset.train_normal:
+            subset = self._dataset.test_normal.take(10)
+            for x, y in subset:
                 self._mean.update_state(
                     tf.reduce_mean(
                         tf.math.abs(self.generator((x, y), training=False) - x)
                     )
                 )
             threshold = self._mean.result()
+            tf.print(
+                "Reconstruction error on unseen subset (normal samples only): ",
+                threshold,
+            )
 
             # reconstruction <= threshold => normal data (label 0)
-            for x, y in self._dataset.test:
+            for x, y in self._dataset.test_normal.skip(10).concatenate(
+                self._dataset.test_anomalous
+            ):  # skip first 10 used for threshold computation
                 self.accuracy.update_state(
                     y_true=y,
                     y_pred=tf.cast(
@@ -223,13 +237,25 @@ class DeScarGAN(Trainer):
                         tf.int32,
                     ),
                 )
-            tf.print("Reconstruction error on train set (normal): ", threshold)
-            current_accuracy = self.accuracy.result()
+            current_accuracy = self.accuracy.result().numpy()
             tf.print("Binary accuracy on validation set: ", current_accuracy)
-            if previous_accuracy < current_accuracy:
+            if best_accuracy < current_accuracy:
+                base_path = self._log_dir / "results" / "best"
                 self.generator.save(
-                    "best_model/generator", overwrite=True, include_optimizer=False
+                    str(base_path / "generator"),
+                    overwrite=True,
+                    include_optimizer=False,
                 )
+                with open(base_path / "accuracy.json", "w") as fp:
+                    json.dump(
+                        {
+                            "value": float(current_accuracy),
+                            "threshold": float(threshold.numpy()),
+                        },
+                        fp,
+                    )
+
+                best_accuracy = current_accuracy
 
             with self._summary_writer.as_default():
                 tf.summary.scalar("accuracy", current_accuracy, step=step)
@@ -524,43 +550,3 @@ class DeScarGAN(Trainer):
         del tape
 
         return d_loss, g_loss, x_hat
-
-
-if __name__ == "__main__":
-    from anomaly_toolbox.datasets import MNIST, SurfaceCracks
-
-    def _main():
-        anomalous_label = 2
-        epochs = 50
-        batch_size = 30
-
-        # input_shape = (64, 64, 1)
-        input_shape = (64, 64, 3)  # 3 = surface cracks
-        step_log_frequency = 50
-        hps = {"learning_rate": hp.HParam("learning_rate", hp.Discrete([1e-4]))}
-
-        dataset = SurfaceCracks()
-        # dataset = MNIST()
-
-        dataset.configure(
-            anomalous_label=anomalous_label,  # ignored if datset = SurfaceCracks
-            batch_size=batch_size,
-            new_size=input_shape[:-1],
-            output_range=(-1.0, 1.0),  # generator has a tanh in output
-            shuffle_buffer_size=20000,
-            cache=True,
-        )
-        log_dir = "cane"
-        summary_writer = tf.summary.create_file_writer(log_dir)
-        for lr in hps["learning_rate"].domain.values:
-            hparams = {"learning_rate": lr}
-            trainer = DeScarGAN(dataset, input_shape, hparams, summary_writer)
-            trainer.train(
-                batch_size=batch_size,
-                epochs=epochs,
-                step_log_frequency=step_log_frequency,
-            )
-            trainer.discriminator.save(log_dir + "/discriminator")
-            trainer.generator.save(log_dir + "/generator")
-
-    _main()
