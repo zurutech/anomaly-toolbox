@@ -39,7 +39,7 @@ class EGBAD(Trainer):
         fake_batch_size = (1,) + input_dimension
         fake_latent_vector = (1,) + (1, 1, self._hps["latent_vector_size"])
         self.generator(tf.zeros(fake_latent_vector))
-        self.encoder(tf.zeros(fake_batch_size))
+        out = self.encoder(tf.zeros(fake_batch_size))
         self.discriminator([tf.zeros(fake_batch_size), tf.zeros(fake_latent_vector)])
 
         self.generator.summary()
@@ -86,6 +86,7 @@ class EGBAD(Trainer):
         # Outside of the keras_metrics because it's used to compute the running
         # mean and not as a metric
         self._mean = keras.metrics.Mean()
+        self._auprc = tf.keras.metrics.AUC(name="auprc", curve="PR", num_thresholds=500)
 
     @staticmethod
     def hyperparameters() -> Set[str]:
@@ -140,6 +141,13 @@ class EGBAD(Trainer):
             # Epoch end
 
             # ## Model selection ## #
+
+            ########
+            # TODO: calculate here the AUPRC - Area Under Precision Recall Curve
+
+
+
+            ########
 
             # Use the mean in calculating the threshold for this epoch
             self._mean.reset_states()
@@ -303,7 +311,7 @@ class EGBAD(Trainer):
             self.test_e_loss_avg.result(),
         )
 
-    @tf.function
+    #@tf.function
     def step_fn(
         self,
         inputs,
