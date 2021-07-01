@@ -87,10 +87,8 @@ class EGBAD(Trainer):
         # mean and not as a metric
         self._mean = keras.metrics.Mean()
         self._auprc = tf.keras.metrics.AUC(name="auprc", curve="PR", num_thresholds=500)
-        self._generator_score = keras.metrics.Mean(name="generator_score")
-        self._discriminator_score = keras.metrics.Mean(name="discriminator_score")
-        self._generator_score_basic = []
-        self._discriminator_score_basic = []
+        self._generator_score = []
+        self._discriminator_score = []
 
     @staticmethod
     def hyperparameters() -> Set[str]:
@@ -147,12 +145,10 @@ class EGBAD(Trainer):
             # ## Model selection ## #
 
             ########
-            # TODO: calculate here the AUPRC - Area Under Precision Recall Curve
+            # Calculate here the AUPRC - Area Under Precision Recall Curve
             self._auprc.reset_state()
-            self._generator_score.reset_state()
-            self._discriminator_score.reset_state()
-            self._generator_score_basic = []
-            self._discriminator_score_basic = []
+            self._generator_score = []
+            self._discriminator_score = []
             labels_test = []
 
             for batch in self._dataset.test:
@@ -170,11 +166,9 @@ class EGBAD(Trainer):
                     keras.layers.Flatten()(delta), axis=1, keepdims=False
                 )
 
-                self._generator_score_basic = tf.concat(
-                    [self._generator_score_basic, generator_score_current], axis=0
+                self._generator_score = tf.concat(
+                    [self._generator_score, generator_score_current], axis=0
                 )
-
-                self._generator_score.update_state(generator_score_current)
 
                 # Discriminator score
                 _, intermediate_layer_1 = self.discriminator(
@@ -188,14 +182,10 @@ class EGBAD(Trainer):
                 fm = keras.layers.Flatten()(intermediate_layer_1 - intermediate_layer_2)
                 discriminator_score_current = tf.norm(fm, axis=1, keepdims=False)
 
-                self._discriminator_score_basic = tf.concat(
-                    [self._discriminator_score_basic, discriminator_score_current],
+                self._discriminator_score = tf.concat(
+                    [self._discriminator_score, discriminator_score_current],
                     axis=0,
                 )
-
-                # self._discriminator_score_basic += discriminator_score_current
-
-                self._discriminator_score.update_state(discriminator_score_current)
 
             ### Calculate the actual AUPRC ###
 
@@ -210,7 +200,7 @@ class EGBAD(Trainer):
 
             # Calculate the actual aupcr
             auprc_value = self._auprc.update_state(labels_test, anomaly_scores)
-            #TODO: save the model when the auprc is at is best
+            # TODO: save the model when the auprc is at is best
 
             ########
 
