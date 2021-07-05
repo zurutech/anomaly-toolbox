@@ -1,15 +1,14 @@
 """Trainer for the BiGAN model used in EGBAD."""
 
 from pathlib import Path
-from typing import Dict, Optional, Set, Tuple
-import json
+from typing import Dict, Set, Tuple
 
 import tensorflow as tf
-import tensorflow.keras as keras
-from tensorboard.plugins.hparams import api as hp
+import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses import egbad as losses
+from anomaly_toolbox.losses.egbad import (adversarial_loss_fm,
+                                          discriminator_loss, encoder_loss)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -36,6 +35,7 @@ class EGBAD(Trainer):
         self.encoder = Encoder(n_channels, self._hps["latent_vector_size"])
         self.generator = Decoder(n_channels, self._hps["latent_vector_size"])
 
+        # Instantiate and define with correct input shape
         fake_batch_size = (1,) + input_dimension
         fake_latent_vector = (1,) + (1, 1, self._hps["latent_vector_size"])
         self.generator(tf.zeros(fake_latent_vector))
@@ -47,48 +47,34 @@ class EGBAD(Trainer):
         self.discriminator.summary()
 
         # Optimizers
-        self.optimizer_g = keras.optimizers.Adam(
+        self.optimizer_g = k.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
-        self.optimizer_d = keras.optimizers.Adam(
+        self.optimizer_d = k.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
-        self.optimizer_e = keras.optimizers.Adam(
+        self.optimizer_e = k.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
 
         # Training Metrics
-        self.epoch_d_loss_avg = tf.keras.metrics.Mean(name="epoch_discriminator_loss")
-        self.epoch_g_loss_avg = tf.keras.metrics.Mean(name="epoch_generator_loss")
-        self.epoch_e_loss_avg = tf.keras.metrics.Mean(name="epoch_encoder_loss")
-        self.accuracy = keras.metrics.BinaryAccuracy(name="binary_accuracy")
-        self._training_keras_metrics = [
-            self.epoch_d_loss_avg,
-            self.epoch_g_loss_avg,
-            self.epoch_e_loss_avg,
-        ]
-        # Test Metrics
-        self.test_d_loss_avg = tf.keras.metrics.Mean(name="test_discriminator_loss")
-        self.test_g_loss_avg = tf.keras.metrics.Mean(name="test_generator_loss")
-        self.test_e_loss_avg = tf.keras.metrics.Mean(name="test_encoder_loss")
-        self._test_keras_metrics = [
-            self.test_d_loss_avg,
-            self.test_g_loss_avg,
-            self.test_e_loss_avg,
-        ]
+        self.epoch_d_loss_avg = k.metrics.Mean(name="epoch_discriminator_loss")
+        self.epoch_g_loss_avg = k.metrics.Mean(name="epoch_generator_loss")
+        self.epoch_e_loss_avg = k.metrics.Mean(name="epoch_encoder_loss")
+        self._auprc = k.metrics.AUC(name="auprc", curve="PR", num_thresholds=500)
         self.keras_metrics = {
             metric.name: metric
-            for metric in self._training_keras_metrics
-            + self._test_keras_metrics
-            + [self.accuracy]
+            for metric in [
+                self.epoch_d_loss_avg,
+                self.epoch_g_loss_avg,
+                self.epoch_e_loss_avg,
+                self._auprc,
+            ]
         }
 
-        # Outside of the keras_metrics because it's used to compute the running
-        # mean and not as a metric
-        self._mean = keras.metrics.Mean()
-        self._auprc = tf.keras.metrics.AUC(name="auprc", curve="PR", num_thresholds=500)
-        self._generator_score = []
-        self._discriminator_score = []
+        self._flatten = k.layers.Flatten()
+
+        self._alpha = tf.constant(0.9)
 
     @staticmethod
     def hyperparameters() -> Set[str]:
@@ -97,23 +83,17 @@ class EGBAD(Trainer):
 
     def train(
         self,
-        epoch: int,
+        epochs: int,
         step_log_frequency: int = 100,
-        test_dataset: Optional[tf.data.Dataset] = None,
     ):
 
-        best_accuracy = -1.0
         best_auprc = -1.0
-        for epoch in range(epoch):
-            training_data, training_reconstructions, training_generated = [], [], []
-            batch_size = None
+        for epoch in tf.range(epochs):
             for batch in self._dataset.train:
-                if not batch_size:
-                    batch_size = tf.shape(batch[0])[0]
+                x, _ = batch
+
                 # Perform the train step
-                x, x_hat, xz_hat, d_loss, g_loss, e_loss = self.step_fn(
-                    batch, training=True
-                )
+                g_z, xz_hat, d_loss, g_loss, e_loss = self.train_step(batch)
 
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
@@ -122,14 +102,27 @@ class EGBAD(Trainer):
                 step = self.optimizer_d.iterations.numpy()
                 learning_rate = self.optimizer_g.learning_rate.numpy()
 
-                # Save the input images and their reconstructions for later use
-                training_data.append(x)
-                training_generated.append(x_hat)
-                training_reconstructions.append(xz_hat)
-
                 if tf.equal(tf.math.mod(step, step_log_frequency), 0):
                     with self._summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
+                        tf.summary.image(
+                            "x_xhat_xz_hat", tf.concat([x, g_z, xz_hat], axis=2)
+                        )
+                        tf.summary.scalar(
+                            "d_loss",
+                            self.epoch_d_loss_avg.result(),
+                            step=step,
+                        )
+                        tf.summary.scalar(
+                            "g_loss",
+                            self.epoch_g_loss_avg.result(),
+                            step=step,
+                        )
+                        tf.summary.scalar(
+                            "e_loss",
+                            self.epoch_e_loss_avg.result(),
+                            step=step,
+                        )
 
                     tf.print(
                         "Step {:04d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f}, lr: {:.5f}".format(
@@ -141,361 +134,81 @@ class EGBAD(Trainer):
                         )
                     )
             # Epoch end
+            tf.print(epoch, " completed")
 
-            # ## Model selection ## #
+            # Model selection at the end of every epoch
 
-            ########
-            # Calculate here the AUPRC - Area Under Precision Recall Curve
+            # Calculate AUPRC - Area Under Precision Recall Curve
+            # 1. Computhe the anomaly score
+            # 2. Use the AUC object to compute the AUCROC with different
+            # trehsold values on the anomaly score.
             self._auprc.reset_state()
-            self._generator_score = []
-            self._discriminator_score = []
-            labels_test = []
-
             for batch in self._dataset.test:
+                x, _ = batch
 
-                data, labels = batch
+                e_x = self.encoder(x, training=False)
+                g_ex = self.generator(e_x, training=False)
 
-                labels_test = tf.concat([labels_test, labels], axis=0)
+                d_x, x_features = self.discriminator([x, e_x], training=False)
+                d_gex, ex_features = self.discriminator([g_ex, e_x], training=False)
 
-                encoded_data = self.encoder(data, training=False)
-                reconstructed_data = self.generator(encoded_data, training=False)
-                delta = data - reconstructed_data
+                # Losses: TODO: change the losses to accept the axis parameter
+                # and reduce over axis [1,2,3] and preserve the batch dim
+                # since we need the score per sample, not the average score
+                # in the batch
+                d_loss = discriminator_loss(d_x, d_gex)
+                g_loss = adversarial_loss_fm(x_features, ex_features)
 
-                # Generator scores
-                generator_score_current = tf.norm(
-                    keras.layers.Flatten()(delta), axis=1, keepdims=False
-                )
+                # Anomaly score should have a shape of (batch_size,)
+                anomaly_scores = self._alpha * g_loss + (1.0 - self._alpha) * d_loss
 
-                self._generator_score = tf.concat(
-                    [self._generator_score, generator_score_current], axis=0
-                )
-
-                # Discriminator score
-                _, intermediate_layer_1 = self.discriminator(
-                    [data, encoded_data], training=False
-                )
-                _, intermediate_layer_2 = self.discriminator(
-                    [reconstructed_data, encoded_data], training=False
-                )
-
-                # Feature matching
-                fm = keras.layers.Flatten()(intermediate_layer_1 - intermediate_layer_2)
-                discriminator_score_current = tf.norm(fm, axis=1, keepdims=False)
-
-                self._discriminator_score = tf.concat(
-                    [self._discriminator_score, discriminator_score_current],
-                    axis=0,
-                )
-
-            ### Calculate the actual AUPRC ###
-
-            # Get the scores defined as the anomaly score of the paper
-            weight = 0.1
-            anomaly_scores = tf.math.add_n(
-                [
-                    tf.multiply(self._generator_score_basic, 1 - weight),
-                    tf.multiply(self._discriminator_score_basic, weight),
-                ]
-            )
-
-            # Calculate the actual aupcr
-            auprc_value = self._auprc.update_state(labels_test, anomaly_scores)
+                # Update streaming auprc
+                self._auprc.update_state(labels_test, anomaly_scores)
             # TODO: save the model when the auprc is at is best
-
-            ########
-
-            # Use the mean in calculating the threshold for this epoch
-            self._mean.reset_states()
-
-            # Get a subset of the test data and calculate the mean error between the real data x
-            # and the generated data (after being encoded)
-            subset = self._dataset.test_normal.take(10)
-            for x, y in subset:
-                self._mean.update_state(
-                    tf.reduce_mean(
-                        tf.math.abs(
-                            self.generator(
-                                self.encoder(x, training=False), training=False
-                            )
-                            - x
-                        )
-                    )
-                )
-
-            # The threshold calculated is used to understand how well the current
-            # encoder/generator are doing well
-            threshold = self._mean.result()
-            tf.print(
-                "Reconstruction error on unseen subset (normal samples only): ",
-                threshold,
-            )
-
-            # reconstruction <= threshold => normal data (label 0)
-            # skip first 10 used for threshold computation
-
-            for x, y in self._dataset.test_normal.skip(10).concatenate(
-                self._dataset.test_anomalous
-            ):
-                self.accuracy.update_state(
-                    y_true=y,
-                    y_pred=tf.cast(
-                        # reconstruction > threshold => anomalous (label 1 = cast(True))
-                        # invoke the generator always with the normal label, since that's
-                        # what we suppose to receive in input (and the threshold has been found
-                        # using data that comes only from the normal distribution)
-                        tf.math.greater(
-                            tf.reduce_mean(
-                                tf.math.abs(
-                                    self.generator(
-                                        self.encoder(
-                                            x,
-                                            training=False,
-                                        ),
-                                        training=False,
-                                    )
-                                    - x
-                                ),
-                                axis=[1, 2, 3],
-                            ),
-                            threshold,
-                        ),
-                        tf.int32,
-                    ),
-                )
-            current_accuracy = self.accuracy.result().numpy()
-            tf.print("Binary accuracy on validation set: ", current_accuracy)
-            if best_accuracy < current_accuracy:
-                base_path = self._log_dir / "results" / "best"
-                self.generator.save(
-                    str(base_path / "generator"),
-                    overwrite=True,
-                    include_optimizer=False,
-                )
-                self.encoder.save(
-                    str(base_path / "encoder"),
-                    overwrite=True,
-                    include_optimizer=False,
-                )
-                with open(base_path / "accuracy.json", "w") as fp:
-                    json.dump(
-                        {
-                            "value": float(current_accuracy),
-                            "threshold": float(threshold.numpy()),
-                        },
-                        fp,
-                    )
-
-                best_accuracy = current_accuracy
-
-            with self._summary_writer.as_default():
-                tf.summary.scalar("accuracy", current_accuracy, step=step)
-
-            # # Log at the end of every epoch
-            # self.log(
-            #     input_data=training_data[-1][:batch_size],
-            #     reconstructions=training_reconstructions[-1][:batch_size],
-            #     generated=training_generated[-1][:batch_size],
-            #     summary_writer=self._summary_writer,
-            #     step=step,
-            #     epoch=epoch,
-            #     d_loss_metric=self.epoch_d_loss_avg,
-            #     g_loss_metric=self.epoch_g_loss_avg,
-            #     e_loss_metric=self.epoch_e_loss_avg,
-            #     max_images_to_log=batch_size,
-            #     training=True,
-            # )
-            #
-            # # Test if test dataset is present
-            # if test_dataset:
-            #     _, _, _ = self.test_phase(
-            #         test_dataset=test_dataset,
-            #         epoch=epoch,
-            #         step=step,
-            #     )
 
             # Reset metrics or the data will keep accruing becoming an average of ALL the epochs
             self._reset_keras_metrics()
 
-    def test_phase(
-        self,
-        test_dataset,
-        step: int,
-        epoch: int,
-        log: bool = True,
-    ) -> Tuple:
-        """Perform the test pass on a given test_dataset."""
-        test_iterator = iter(test_dataset)
-        testing_data, testing_reconstructions, testing_generated = [], [], []
-        batch_size = None
-        for input_data in test_iterator:
-            (
-                test_x,
-                test_x_hat,
-                test_xz_hat,
-                test_d_loss,
-                test_g_loss,
-                test_e_loss,
-            ) = self.step_fn(input_data, training=False)
-            if not batch_size:
-                batch_size = tf.shape(test_x)[0]
-            testing_data.append(test_x)
-            testing_generated.append(test_x_hat)
-            testing_reconstructions.append(test_xz_hat)
-            # Update the losses metrics
-            self.test_d_loss_avg.update_state(test_d_loss)
-            self.test_g_loss_avg.update_state(test_g_loss)
-            self.test_e_loss_avg.update_state(test_e_loss)
-        if log:
-            batch_size = batch_size.numpy()
-            self.log(
-                input_data=testing_data[0][:batch_size],
-                reconstructions=testing_reconstructions[0][:batch_size],
-                generated=testing_generated[0][:batch_size],
-                summary_writer=self._summary_writer,
-                step=step,
-                epoch=epoch,
-                d_loss_metric=self.test_d_loss_avg,
-                g_loss_metric=self.test_g_loss_avg,
-                e_loss_metric=self.test_e_loss_avg,
-                max_images_to_log=batch_size,
-                training=False,
-            )
-        return (
-            self.test_d_loss_avg.result(),
-            self.test_g_loss_avg.result(),
-            self.test_e_loss_avg.result(),
-        )
-
-    # @tf.function
-    def step_fn(
+    @tf.function
+    def train_step(
         self,
         inputs,
-        training: bool = True,
     ):
         """Single training step."""
-        x, y = inputs
-        batch_size = tf.shape(x)[0]
-        noise = tf.random.normal((batch_size, 1, 1, self._hps["latent_vector_size"]))
+        x, _ = inputs
+        noise = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
             # Reconstruction
-            x_hat = self.generator(noise, training=training)
+            g_z = self.generator(noise, training=True)
 
-            z = self.encoder(x, training=training)
-            xz_hat = self.generator(z, training=training)
+            z_hat = self.encoder(x, training=True)
+            xz_hat = self.generator(z_hat, training=True)
 
-            d_x, x_features = self.discriminator([x, z], training=training)
-            d_x_hat, x_hat_features = self.discriminator(
-                [x_hat, noise], training=training
-            )
+            d_x, x_features = self.discriminator([x, z_hat], training=True)
+            d_g_z, g_z_features = self.discriminator([g_z, noise], training=True)
 
             # Losses
-            d_loss = losses.discriminator_loss(d_x, d_x_hat)
-            g_loss = losses.adversarial_loss_fm(x_hat_features, x_features)
-            e_loss = losses.encoder_loss(d_x)
+            d_loss = discriminator_loss(d_x, d_g_z)
+            g_loss = adversarial_loss_fm(g_z_features, x_features)
+            e_loss = encoder_loss(d_x)
 
-        if training:
-            d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
-            g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
-            e_grads = tape.gradient(e_loss, self.encoder.trainable_variables)
-
-            self.optimizer_d.apply_gradients(
-                zip(d_grads, self.discriminator.trainable_variables)
-            )
-            self.optimizer_g.apply_gradients(
-                zip(g_grads, self.generator.trainable_variables)
-            )
-            self.optimizer_e.apply_gradients(
-                zip(e_grads, self.encoder.trainable_variables)
-            )
+        d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
+        g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
+        e_grads = tape.gradient(e_loss, self.encoder.trainable_variables)
         del tape
 
+        self.optimizer_d.apply_gradients(
+            zip(d_grads, self.discriminator.trainable_variables)
+        )
+        self.optimizer_g.apply_gradients(
+            zip(g_grads, self.generator.trainable_variables)
+        )
+        self.optimizer_e.apply_gradients(zip(e_grads, self.encoder.trainable_variables))
+
         return (
-            x,
-            x_hat,
+            g_z,
             xz_hat,
             d_loss,
             g_loss,
             e_loss,
-        )
-
-    def log(
-        self,
-        input_data,
-        reconstructions,
-        generated,
-        summary_writer,
-        step: int,
-        epoch: int,
-        d_loss_metric,
-        g_loss_metric,
-        e_loss_metric,
-        max_images_to_log: int,
-        training: bool = True,
-    ) -> None:
-        """
-        Log data (images, losses, learning rate) to TensorBoard.
-
-        Args:
-            input_data: Input images
-            reconstructions: Reconstructions
-            generated: Generated images from noise
-            summary_writer: TensorFlow SummaryWriter to use for logging
-            step: Current step
-            epoch: Current epoch
-            d_loss_metric: Keras Metric
-            g_loss_metric: Keras Metric
-            e_loss_metric: Keras Metric
-            max_images_to_log: Maximum amount of images that will be logged
-            training: True for logging training, False for logging test epoch results
-
-        """
-        with summary_writer.as_default():
-            hp.hparams(self._hps)
-            # |-----------------|
-            # | Logging scalars |
-            # |-----------------|
-            tf.summary.scalar(
-                "epoch_d_loss" if training else "test_epoch_d_loss",
-                d_loss_metric.result(),
-                step=step,
-            )
-            tf.summary.scalar(
-                "epoch_g_loss" if training else "test_epoch_g_loss",
-                g_loss_metric.result(),
-                step=step,
-            )
-            tf.summary.scalar(
-                "epoch_e_loss" if training else "test_epoch_e_loss",
-                e_loss_metric.result(),
-                step=step,
-            )
-            # |----------------|
-            # | Logging images |
-            # |----------------|
-            tf.summary.image(
-                "training_data" if training else "test_data",
-                input_data,
-                max_outputs=max_images_to_log,
-                step=step,
-            )
-            tf.summary.image(
-                "training_generations" if training else "test_generations",
-                generated,
-                max_outputs=max_images_to_log,
-                step=step,
-            )
-            tf.summary.image(
-                "training_reconstructions" if training else "test_reconstructions",
-                reconstructions,
-                max_outputs=max_images_to_log,
-                step=step,
-            )
-        print(
-            "{}: {:03d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f},".format(
-                "EPOCH" if training else "TEST",
-                epoch,
-                d_loss_metric.result(),
-                g_loss_metric.result(),
-                e_loss_metric.result(),
-            )
         )
