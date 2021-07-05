@@ -6,8 +6,6 @@
 import tensorflow as tf
 from tensorflow import keras
 
-__ALL__ = ["adversarial_loss", "feature_matching_loss"]
-
 
 def adversarial_loss(d_real, d_gen):
     """
@@ -42,3 +40,7 @@ def feature_matching_loss(feature_a, feature_b):
 
     """
     return keras.losses.mean_squared_error(feature_a, feature_b)
+
+
+def residual_loss(x, x_hat):
+    return tf.reduce_mean(tf.abs(x - x_hat))
