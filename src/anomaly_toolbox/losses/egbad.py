@@ -25,6 +25,7 @@ def discriminator_loss(d_real, d_gen):
         d_real,
         from_logits=False,
     )
+
     generated_loss = keras.losses.binary_crossentropy(
         # from_logits=True
         tf.zeros_like(d_gen),
@@ -32,15 +33,28 @@ def discriminator_loss(d_real, d_gen):
         from_logits=False,
     )
 
-    return tf.reduce_mean(real_loss + generated_loss)
+    return tf.reduce_mean(real_loss) + tf.reduce_mean(generated_loss)
 
 
 def encoder_loss(d_real):
-    return keras.losses.binary_crossentropy(
-        # from_logits=True
-        tf.zeros_like(d_real),
-        d_real,
-        from_logits=False,
+    return tf.reduce_mean(
+        keras.losses.binary_crossentropy(
+            # from_logits=True
+            tf.zeros_like(d_real),
+            d_real,
+            from_logits=False,
+        )
+    )
+
+
+def generator_loss(d_gen):
+    return tf.reduce_mean(
+        keras.losses.binary_crossentropy(
+            # from_logits=True
+            tf.ones_like(d_gen),
+            d_gen,
+            from_logits=False,
+        )
     )
 
 
