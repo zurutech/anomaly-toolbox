@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Dict, Set, Tuple
+import json
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -11,6 +12,7 @@ from anomaly_toolbox.losses.egbad import (
     adversarial_loss_fm,
     discriminator_loss,
     encoder_loss,
+    residual_loss,
 )
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
@@ -89,8 +91,6 @@ class EGBAD(Trainer):
         epochs: int,
         step_log_frequency: int = 100,
     ):
-
-        best_auprc = -1.0
         for epoch in tf.range(epochs):
             for batch in self._dataset.train:
                 x, _ = batch
@@ -148,8 +148,9 @@ class EGBAD(Trainer):
             # 2. Use the AUC object to compute the AUCROC with different
             # thresholds values on the anomaly score.
             self._auprc.reset_state()
+            best_auprc = -1
             for batch in self._dataset.test:
-                x, _ = batch
+                x, labels_test = batch
 
                 e_x = self.encoder(x, training=False)
                 g_ex = self.generator(e_x, training=False)
@@ -161,16 +162,48 @@ class EGBAD(Trainer):
                 # and reduce over axis [1,2,3] and preserve the batch dim
                 # since we need the score per sample, not the average score
                 # in the batch
-                d_loss = discriminator_loss(d_x, d_gex)
-                g_loss = adversarial_loss_fm(x_features, ex_features)
+                # d_loss = discriminator_loss(d_x, d_gex)
+                # g_loss = adversarial_loss_fm(x_features, ex_features)
+
+                g_score = tf.norm(
+                    k.layers.Flatten()(residual_loss(x, g_ex)), axis=1, keepdims=False
+                )
+                d_score = tf.norm(
+                    k.layers.Flatten()(x_features - ex_features), axis=1, keepdims=False
+                )
 
                 # Anomaly score should have a shape of (batch_size,)
-                anomaly_scores = self._alpha * g_loss + (1.0 - self._alpha) * d_loss
+                anomaly_scores = tf.linalg.normalize(
+                    self._alpha * d_score + (1.0 - self._alpha) * g_score
+                )
 
                 # Update streaming auprc
-                # self._auprc.update_state(labels_test, anomaly_scores)
-            # TODO: save the model when the auprc is at is best
+                self._auprc.update_state(labels_test, anomaly_scores[0])
 
+                # Save the model when AUPRC is the best
+                current_auprc = self._auprc.result()
+                tf.print("AUPRC on validation set: ", current_auprc)
+                if best_auprc < current_auprc:
+                    best_auprc = current_auprc
+                    base_path = self._log_dir / "results" / "best"
+                    self.generator.save(
+                        str(base_path / "generator"),
+                        overwrite=True,
+                        include_optimizer=False,
+                    )
+                    self.encoder.save(
+                        str(base_path / "encoder"),
+                        overwrite=True,
+                        include_optimizer=False,
+                    )
+
+                    with open(base_path / "auprc.json", "w") as fp:
+                        json.dump(
+                            {
+                                "value": float(best_auprc),
+                            },
+                            fp,
+                        )
             # Reset metrics or the data will keep accruing becoming an average of ALL the epochs
             self._reset_keras_metrics()
 
