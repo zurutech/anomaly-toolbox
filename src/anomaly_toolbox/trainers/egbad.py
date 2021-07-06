@@ -186,22 +186,11 @@ class EGBAD(Trainer):
                 if best_auprc < current_auprc:
                     best_auprc = current_auprc
                     base_path = self._log_dir / "results" / "best"
-                    # self.generator.save(
-                    #     str(base_path / "generator"),
-                    #     overwrite=True,
-                    #     include_optimizer=False,
-                    #     save_format='tf'
-                    # )
 
                     self.generator.save_weights(
                         str(base_path / "generator"), overwrite=True
                     )
 
-                    # self.encoder.save(
-                    #     str(base_path / "encoder"),
-                    #     overwrite=True,
-                    #     include_optimizer=False,
-                    # )
                     self.encoder.save_weights(
                         str(base_path / "encoder"), overwrite=True
                     )

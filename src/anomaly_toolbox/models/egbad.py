@@ -1,5 +1,4 @@
 """BiGAN Architecture Implementation as used in EGBAD."""
-import keras.backend
 import tensorflow as tf
 import tensorflow.keras as k
 
@@ -68,7 +67,6 @@ class Encoder(k.Model):
             units=latent_space_dimension, kernel_initializer=KERNEL_INITIALIZER
         )(x)
 
-        # x = tf.reshape(x, shape=(tf.shape(x)[0], 1, 1, x.shape[1]))
         x = tf.keras.layers.Reshape(target_shape=[1, 1, x.shape[1]])(x)
 
         self._encoder = k.Model(inputs=input_layer, outputs=x, name="bigan_encoder")
@@ -99,67 +97,11 @@ class Decoder(k.Model):
         super().__init__()
 
         # output dimension is 28, 28
-        # l2_penalty = 0.0
+        l2_penalty = 0.0
 
         # input_layer = k.layers.Input(shape=(latent_space_dimension,))
 
-        input_layer = k.layers.Input(
-            shape=(tf.constant(1), tf.constant(1), tf.constant(latent_space_dimension))
-        )
-
-        #################### TEST
-
-        # model = k.Sequential()
-        # model.add(k.layers.Input(shape=(1, 1, latent_space_dimension)))
-        # model.add(k.layers.Dense(1024, activation="relu"))
-        # model.add(
-        #     k.layers.BatchNormalization(
-        #         beta_initializer=ALMOST_ONE,
-        #         gamma_initializer=ALMOST_ONE,
-        #         momentum=0.1,
-        #         epsilon=1e-5,
-        #     )
-        # )
-        # model.add(k.layers.Dense(7 * 7 * 128, activation="relu"))
-        # model.add(
-        #     k.layers.BatchNormalization(
-        #         beta_initializer=ALMOST_ONE,
-        #         gamma_initializer=ALMOST_ONE,
-        #         momentum=0.1,
-        #         epsilon=1e-5,
-        #     )
-        # )
-        # model.add(k.layers.Reshape(target_shape=[7, 7, 128]))
-        # model.add(k.layers.Conv2DTranspose(
-        #     64,
-        #     kernel_size=4,
-        #     strides=2,
-        #     padding="same",
-        #     use_bias=False,
-        #     kernel_regularizer=k.regularizers.l2(0.0),
-        #     kernel_initializer=KERNEL_INITIALIZER,
-        #     activation="relu",
-        # ))
-        # model.add(k.layers.BatchNormalization(
-        #     beta_initializer=ALMOST_ONE,
-        #     gamma_initializer=ALMOST_ONE,
-        #     momentum=0.1,
-        #     epsilon=1e-5,
-        # ))
-        #
-        # model.add(k.layers.Conv2DTranspose(
-        #     n_channels,
-        #     kernel_size=4,
-        #     strides=2,
-        #     padding="same",
-        #     use_bias=False,
-        #     kernel_regularizer=k.regularizers.l2(0.0),
-        #     kernel_initializer=KERNEL_INITIALIZER,
-        #     activation="tanh",
-        # ))
-        #
-        # self._decoder = model
-        #########################
+        input_layer = k.layers.Input(shape=(1, 1, tf.constant(latent_space_dimension)))
 
         x = k.layers.Dense(1024, activation="relu")(input_layer)
         x = k.layers.BatchNormalization(
@@ -176,7 +118,6 @@ class Decoder(k.Model):
             epsilon=1e-5,
         )(x)
 
-        # x = tf.reshape(x, [-1, 7, 7, 128])
         x = k.layers.Reshape(target_shape=(7, 7, 128))(x)
 
         x = k.layers.Conv2DTranspose(
@@ -185,7 +126,7 @@ class Decoder(k.Model):
             strides=2,
             padding="same",
             use_bias=False,
-            kernel_regularizer=k.regularizers.l2(0.0),
+            kernel_regularizer=k.regularizers.l2(l2_penalty),
             kernel_initializer=KERNEL_INITIALIZER,
             activation="relu",
         )(x)
@@ -201,7 +142,7 @@ class Decoder(k.Model):
             strides=2,
             padding="same",
             use_bias=False,
-            kernel_regularizer=k.regularizers.l2(0.0),
+            kernel_regularizer=k.regularizers.l2(l2_penalty),
             kernel_initializer=KERNEL_INITIALIZER,
             activation="tanh",
         )(x)
