@@ -7,8 +7,11 @@ import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses.egbad import (adversarial_loss_fm,
-                                          discriminator_loss, encoder_loss)
+from anomaly_toolbox.losses.egbad import (
+    adversarial_loss_fm,
+    discriminator_loss,
+    encoder_loss,
+)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -106,7 +109,9 @@ class EGBAD(Trainer):
                     with self._summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
                         tf.summary.image(
-                            "x_xhat_xz_hat", tf.concat([x, g_z, xz_hat], axis=2)
+                            "x_xhat_xz_hat",
+                            tf.concat([x, g_z, xz_hat], axis=2),
+                            step=step,
                         )
                         tf.summary.scalar(
                             "d_loss",
@@ -139,9 +144,9 @@ class EGBAD(Trainer):
             # Model selection at the end of every epoch
 
             # Calculate AUPRC - Area Under Precision Recall Curve
-            # 1. Computhe the anomaly score
+            # 1. Compute the the anomaly score
             # 2. Use the AUC object to compute the AUCROC with different
-            # trehsold values on the anomaly score.
+            # thresholds values on the anomaly score.
             self._auprc.reset_state()
             for batch in self._dataset.test:
                 x, _ = batch
@@ -163,20 +168,22 @@ class EGBAD(Trainer):
                 anomaly_scores = self._alpha * g_loss + (1.0 - self._alpha) * d_loss
 
                 # Update streaming auprc
-                self._auprc.update_state(labels_test, anomaly_scores)
+                # self._auprc.update_state(labels_test, anomaly_scores)
             # TODO: save the model when the auprc is at is best
 
             # Reset metrics or the data will keep accruing becoming an average of ALL the epochs
             self._reset_keras_metrics()
 
-    @tf.function
+    # @tf.function
     def train_step(
         self,
         inputs,
     ):
         """Single training step."""
         x, _ = inputs
-        noise = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
+        noise = tf.random.normal(
+            (tf.shape(x)[0], 1, 1, self._hps["latent_vector_size"])
+        )
         with tf.GradientTape(persistent=True) as tape:
             # Reconstruction
             g_z = self.generator(noise, training=True)
