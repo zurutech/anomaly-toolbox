@@ -8,13 +8,14 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-def discriminator_loss(d_real, d_gen):
+def discriminator_loss(d_real, d_gen, axis=-1):
     """
     Compute the discriminator loss.
 
     Args:
         d_real: Output of the Discriminator when fed with real data.
         d_gen: Output of the Discriminator when fed with generated data.
+        axis: The axis to reduce (default: -1, i.e., no reduce)
 
     Returns:
         Loss on real data + Loss on generated data.
@@ -25,7 +26,14 @@ def discriminator_loss(d_real, d_gen):
     generated_loss = keras.losses.binary_crossentropy(
         tf.zeros_like(d_gen), d_gen, from_logits=True
     )
-    return real_loss + generated_loss
+
+    output_loss = real_loss + generated_loss
+    if axis:
+        tf.reduce_mean(output_loss, axis=axis)
+
+    # return real_loss + generated_loss
+    return output_loss
+
 
 
 def encoder_loss(d_real):
@@ -61,7 +69,7 @@ def adversarial_loss_bce(d_gen):
     )
 
 
-def adversarial_loss_fm(feature_a, feature_b):
+def adversarial_loss_fm(feature_a, feature_b, axis=0):
     """
     Compute the adversarial feature matching loss.
 
@@ -73,7 +81,8 @@ def adversarial_loss_fm(feature_a, feature_b):
         the value of the adversarial loss
 
     """
-    return keras.losses.mean_squared_error(feature_a, feature_b)
+    output_loss = keras.losses.mean_squared_error(feature_a, feature_b)
+    return output_loss
 
 
 def residual_loss(x, Gz):
@@ -99,7 +108,7 @@ def residual_loss(x, Gz):
 #     Args:
 #         positive: the discriminator output for the positive class: 2D tensor
 #         negative: the discriminator output for the negative class: 2D tensor
-#         smooth: when true, appiles one-sided label smoothing
+#         smooth: when true, applies one-sided label smoothing
 
 #     Returns:
 #         The sum of 2 BCE
