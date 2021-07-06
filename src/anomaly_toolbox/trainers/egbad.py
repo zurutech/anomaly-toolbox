@@ -182,9 +182,14 @@ class EGBAD(Trainer):
 
                 # Save the model when AUPRC is the best
                 current_auprc = self._auprc.result()
-                tf.print("AUPRC on validation set: ", current_auprc)
+
                 if best_auprc < current_auprc:
+
+                    tf.print("Best AUPRC on validation set: ", current_auprc)
+
+                    # Replace the best
                     best_auprc = current_auprc
+
                     base_path = self._log_dir / "results" / "best"
 
                     self.generator.save_weights(
