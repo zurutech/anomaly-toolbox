@@ -8,37 +8,39 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-def discriminator_loss(d_real, d_gen, axis=-1):
+def discriminator_loss(d_real, d_gen):
     """
     Compute the discriminator loss.
 
     Args:
         d_real: Output of the Discriminator when fed with real data.
         d_gen: Output of the Discriminator when fed with generated data.
-        axis: The axis to reduce (default: -1, i.e., no reduce)
 
     Returns:
         Loss on real data + Loss on generated data.
     """
     real_loss = keras.losses.binary_crossentropy(
-        tf.ones_like(d_real), d_real, from_logits=True
+        # from_logits=True
+        tf.ones_like(d_real),
+        d_real,
+        from_logits=False,
     )
     generated_loss = keras.losses.binary_crossentropy(
-        tf.zeros_like(d_gen), d_gen, from_logits=True
+        # from_logits=True
+        tf.zeros_like(d_gen),
+        d_gen,
+        from_logits=False,
     )
 
-    output_loss = real_loss + generated_loss
-    if axis:
-        tf.reduce_mean(output_loss, axis=axis)
-
-    # return real_loss + generated_loss
-    return output_loss
-
+    return tf.reduce_mean(real_loss + generated_loss)
 
 
 def encoder_loss(d_real):
     return keras.losses.binary_crossentropy(
-        tf.zeros_like(d_real), d_real, from_logits=True
+        # from_logits=True
+        tf.zeros_like(d_real),
+        d_real,
+        from_logits=False,
     )
 
 
@@ -69,7 +71,7 @@ def adversarial_loss_bce(d_gen):
     )
 
 
-def adversarial_loss_fm(feature_a, feature_b, axis=0):
+def adversarial_loss_fm(feature_a, feature_b):
     """
     Compute the adversarial feature matching loss.
 
@@ -85,20 +87,21 @@ def adversarial_loss_fm(feature_a, feature_b, axis=0):
     return output_loss
 
 
-def residual_loss(x, Gz):
+def residual_loss(x, Gz, axis=-1):
     """
     Return the residual loss between x and Gz.
 
     Args:
         x: The original images batch, 4D
         Gz: The generated images
+        axis: The axis on which perform the reduce operation, deafault: -1
 
     Returns:
         sum | Gz - x |
     """
     assert x.shape == Gz.shape
     flat = (-1, x.shape[1] * x.shape[2] * x.shape[3])
-    return tf.reduce_mean(tf.reshape(tf.abs(Gz - x), flat))
+    return tf.reduce_mean(tf.reshape(tf.abs(Gz - x), shape=flat), axis=axis)
 
 
 # def min_max(positive, negative, label_smooth=False) -> tf.Tensor:
