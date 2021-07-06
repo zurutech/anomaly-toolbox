@@ -1,19 +1,16 @@
 """Trainer for the BiGAN model used in EGBAD."""
 
+import json
 from pathlib import Path
 from typing import Dict, Set, Tuple
-import json
 
 import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses.egbad import (
-    adversarial_loss_fm,
-    discriminator_loss,
-    encoder_loss,
-    residual_loss,
-)
+from anomaly_toolbox.losses.egbad import (adversarial_loss_fm,
+                                          discriminator_loss, encoder_loss,
+                                          residual_loss)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -42,7 +39,7 @@ class EGBAD(Trainer):
 
         # Instantiate and define with correct input shape
         fake_batch_size = (1,) + input_dimension
-        fake_latent_vector = (1,) + (1, 1, self._hps["latent_vector_size"])
+        fake_latent_vector = (1, self._hps["latent_vector_size"])
         self.generator(tf.zeros(fake_latent_vector))
         self.encoder(tf.zeros(fake_batch_size))
         self.discriminator([tf.zeros(fake_batch_size), tf.zeros(fake_latent_vector)])
@@ -217,9 +214,7 @@ class EGBAD(Trainer):
     ):
         """Single training step."""
         x, _ = inputs
-        noise = tf.random.normal(
-            (tf.shape(x)[0], 1, 1, self._hps["latent_vector_size"])
-        )
+        noise = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
             # Reconstruction
             g_z = self.generator(noise, training=True)

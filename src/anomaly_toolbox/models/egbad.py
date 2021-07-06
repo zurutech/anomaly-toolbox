@@ -1,12 +1,11 @@
 """BiGAN Architecture Implementation as used in EGBAD."""
-import tensorflow as tf
 import tensorflow.keras as k
 
 KERNEL_INITIALIZER = k.initializers.RandomNormal(mean=0.0, stddev=0.02)
 ALMOST_ONE = k.initializers.RandomNormal(mean=1.0, stddev=0.02)
 
 
-class Encoder(k.Model):
+class Encoder(k.Sequential):
     """
     Assemble the EGBAD BiGAN Encoder as a :obj:`tf.keras.Model`.
     """
@@ -25,57 +24,50 @@ class Encoder(k.Model):
         Return:
             The assembled model.
         """
-        super().__init__()
+        super().__init__(
+            [
+                k.layers.Input(shape=(28, 28, n_channels)),
+                k.layers.Conv2D(
+                    32,
+                    kernel_size=3,
+                    strides=1,
+                    padding="same",
+                    kernel_regularizer=k.regularizers.l2(l2=0.0),
+                    kernel_initializer=KERNEL_INITIALIZER,
+                ),
+                k.layers.LeakyReLU(alpha=0.2),
+                k.layers.Conv2D(
+                    64,
+                    kernel_size=3,
+                    strides=2,
+                    padding="same",
+                    kernel_regularizer=k.regularizers.l2(l2=0.0),
+                    kernel_initializer=KERNEL_INITIALIZER,
+                ),
+                k.layers.LeakyReLU(alpha=0.2),
+                k.layers.BatchNormalization(),
+                k.layers.Conv2D(
+                    128,
+                    kernel_size=3,
+                    strides=2,
+                    padding="same",
+                    kernel_regularizer=k.regularizers.l2(l2=0.0),
+                    kernel_initializer=KERNEL_INITIALIZER,
+                ),
+                k.layers.LeakyReLU(alpha=0.2),
+                k.layers.BatchNormalization(),
+                k.layers.Flatten(),
+                k.layers.Dense(
+                    units=latent_space_dimension, kernel_initializer=KERNEL_INITIALIZER
+                ),
+            ]
+        )
 
-        input_layer = k.layers.Input(shape=(28, 28, n_channels))
-
-        x = k.layers.Conv2D(
-            32,
-            kernel_size=3,
-            strides=1,
-            padding="same",
-            kernel_regularizer=k.regularizers.l2(l2=0.0),
-            kernel_initializer=KERNEL_INITIALIZER,
-        )(input_layer)
-        x = k.layers.LeakyReLU(alpha=0.2)(x)
-
-        x = k.layers.Conv2D(
-            64,
-            kernel_size=3,
-            strides=2,
-            padding="same",
-            kernel_regularizer=k.regularizers.l2(l2=0.0),
-            kernel_initializer=KERNEL_INITIALIZER,
-        )(x)
-        x = k.layers.LeakyReLU(alpha=0.2)(x)
-        x = k.layers.BatchNormalization()(x)
-
-        x = k.layers.Conv2D(
-            128,
-            kernel_size=3,
-            strides=2,
-            padding="same",
-            kernel_regularizer=k.regularizers.l2(l2=0.0),
-            kernel_initializer=KERNEL_INITIALIZER,
-        )(x)
-        x = k.layers.LeakyReLU(alpha=0.2)(x)
-        x = k.layers.BatchNormalization()(x)
-
-        x = k.layers.Flatten()(x)
-
-        x = k.layers.Dense(
-            units=latent_space_dimension, kernel_initializer=KERNEL_INITIALIZER
-        )(x)
-
-        x = tf.keras.layers.Reshape(target_shape=[1, 1, x.shape[1]])(x)
-
-        self._encoder = k.Model(inputs=input_layer, outputs=x, name="bigan_encoder")
-
-    def call(self, inputs, training=False):
-        return self._encoder(inputs, training=training)
+    def call(self, inputs, training=None, mask=None):
+        return super().call(inputs, training=training, mask=mask)
 
 
-class Decoder(k.Model):
+class Decoder(k.Sequential):
     """
     Assemble the EGBAD BiGAN Decoder as a :obj:`tf.keras.Model`.
     """
@@ -94,63 +86,57 @@ class Decoder(k.Model):
         Return:
             The assembled model.
         """
-        super().__init__()
-
         # output dimension is 28, 28
         l2_penalty = 0.0
+        super().__init__(
+            [
+                k.layers.Input(shape=(latent_space_dimension,)),
+                k.layers.Dense(1024, activation="relu"),
+                k.layers.BatchNormalization(
+                    beta_initializer=ALMOST_ONE,
+                    gamma_initializer=ALMOST_ONE,
+                    momentum=0.1,
+                    epsilon=1e-5,
+                ),
+                k.layers.Dense(7 * 7 * 128, activation="relu"),
+                k.layers.BatchNormalization(
+                    beta_initializer=ALMOST_ONE,
+                    gamma_initializer=ALMOST_ONE,
+                    momentum=0.1,
+                    epsilon=1e-5,
+                ),
+                k.layers.Reshape(target_shape=(7, 7, 128)),
+                k.layers.Conv2DTranspose(
+                    64,
+                    kernel_size=4,
+                    strides=2,
+                    padding="same",
+                    use_bias=False,
+                    kernel_regularizer=k.regularizers.l2(l2_penalty),
+                    kernel_initializer=KERNEL_INITIALIZER,
+                    activation="relu",
+                ),
+                k.layers.BatchNormalization(
+                    beta_initializer=ALMOST_ONE,
+                    gamma_initializer=ALMOST_ONE,
+                    momentum=0.1,
+                    epsilon=1e-5,
+                ),
+                k.layers.Conv2DTranspose(
+                    n_channels,
+                    kernel_size=4,
+                    strides=2,
+                    padding="same",
+                    use_bias=False,
+                    kernel_regularizer=k.regularizers.l2(l2_penalty),
+                    kernel_initializer=KERNEL_INITIALIZER,
+                    activation="tanh",
+                ),
+            ]
+        )
 
-        # input_layer = k.layers.Input(shape=(latent_space_dimension,))
-
-        input_layer = k.layers.Input(shape=(1, 1, tf.constant(latent_space_dimension)))
-
-        x = k.layers.Dense(1024, activation="relu")(input_layer)
-        x = k.layers.BatchNormalization(
-            beta_initializer=ALMOST_ONE,
-            gamma_initializer=ALMOST_ONE,
-            momentum=0.1,
-            epsilon=1e-5,
-        )(x)
-        x = k.layers.Dense(7 * 7 * 128, activation="relu")(x)
-        x = k.layers.BatchNormalization(
-            beta_initializer=ALMOST_ONE,
-            gamma_initializer=ALMOST_ONE,
-            momentum=0.1,
-            epsilon=1e-5,
-        )(x)
-
-        x = k.layers.Reshape(target_shape=(7, 7, 128))(x)
-
-        x = k.layers.Conv2DTranspose(
-            64,
-            kernel_size=4,
-            strides=2,
-            padding="same",
-            use_bias=False,
-            kernel_regularizer=k.regularizers.l2(l2_penalty),
-            kernel_initializer=KERNEL_INITIALIZER,
-            activation="relu",
-        )(x)
-        x = k.layers.BatchNormalization(
-            beta_initializer=ALMOST_ONE,
-            gamma_initializer=ALMOST_ONE,
-            momentum=0.1,
-            epsilon=1e-5,
-        )(x)
-        x = k.layers.Conv2DTranspose(
-            n_channels,
-            kernel_size=4,
-            strides=2,
-            padding="same",
-            use_bias=False,
-            kernel_regularizer=k.regularizers.l2(l2_penalty),
-            kernel_initializer=KERNEL_INITIALIZER,
-            activation="tanh",
-        )(x)
-
-        self._decoder = k.Model(inputs=input_layer, outputs=x, name="bigan_decoder")
-
-    def call(self, inputs, training=False):
-        return self._decoder(inputs, training=training)
+    def call(self, inputs, training=None, mask=None):
+        return super().call(inputs, training=training, mask=mask)
 
 
 class Discriminator(k.Model):
@@ -177,64 +163,69 @@ class Discriminator(k.Model):
         input_dimension = (28, 28, n_channels)
 
         # Input layers
-        input_layer = k.layers.Input(shape=input_dimension)
-        # input_encoded_layer = k.layers.Input(shape=(latent_space_dimension,))
-        input_encoded_layer = k.layers.Input(shape=(1, 1, latent_space_dimension))
+        self._input_layer = k.layers.Input(shape=input_dimension)
+        self._input_encoded_layer = k.layers.Input(shape=(latent_space_dimension,))
 
         # D(x): Convolution -> Convolution
-        x = k.layers.Conv2D(
-            filters=64,
-            kernel_size=4,
-            strides=2,
-            kernel_initializer=KERNEL_INITIALIZER,
-        )(input_layer)
-        x = k.layers.LeakyReLU(0.1)(x)
-
-        x = k.layers.Conv2D(
-            filters=128,
-            kernel_size=4,
-            strides=2,
-            kernel_initializer=KERNEL_INITIALIZER,
-        )(x)
-        x = k.layers.LeakyReLU(0.2)(x)
-        x = k.layers.BatchNormalization()(x)
-
-        x = k.layers.Conv2D(
-            filters=512,
-            kernel_size=4,
-            strides=2,
-            kernel_initializer=KERNEL_INITIALIZER,
-        )(x)
-        x = k.layers.LeakyReLU(0.2)(x)
-        x = k.layers.BatchNormalization()(x)
-        # x = k.layers.Flatten()(x)
+        self._backbone = k.Sequential(
+            [
+                k.layers.Input(shape=input_dimension),
+                k.layers.Conv2D(
+                    filters=64,
+                    kernel_size=4,
+                    strides=2,
+                    kernel_initializer=KERNEL_INITIALIZER,
+                ),
+                k.layers.LeakyReLU(0.1),
+                k.layers.Conv2D(
+                    filters=128,
+                    kernel_size=4,
+                    strides=2,
+                    kernel_initializer=KERNEL_INITIALIZER,
+                ),
+                k.layers.LeakyReLU(0.2),
+                k.layers.BatchNormalization(),
+                k.layers.Conv2D(
+                    filters=512,
+                    kernel_size=4,
+                    strides=2,
+                    kernel_initializer=KERNEL_INITIALIZER,
+                ),
+                k.layers.LeakyReLU(0.2),
+                k.layers.BatchNormalization(),
+                k.layers.Flatten(),
+            ]
+        )
 
         # D(z): Dense
-        z = k.layers.Dense(units=512, kernel_initializer=KERNEL_INITIALIZER)(
-            input_encoded_layer
+        self._encode_latent = k.Sequential(
+            [
+                k.layers.Dense(units=512, kernel_initializer=KERNEL_INITIALIZER),
+                k.layers.LeakyReLU(0.2),
+            ]
         )
-        z = k.layers.LeakyReLU(0.2)(z)
-
-        # Concatenate
-        concat_input = k.layers.concatenate([x, z])
 
         # D(x, z): Dense -> Dense
-        y = k.layers.Dense(units=1024, kernel_initializer=KERNEL_INITIALIZER)(
-            concat_input
+        self._features = k.Sequential(
+            [
+                k.layers.Dense(units=1024, kernel_initializer=KERNEL_INITIALIZER),
+                k.layers.LeakyReLU(0.2),
+            ]
         )
-        y = k.layers.LeakyReLU(0.2)(y)
 
-        intermediate_layer = y
-
-        output = k.layers.Dense(
+        self._output = k.layers.Dense(
             units=1, kernel_initializer=KERNEL_INITIALIZER, activation="sigmoid"
-        )(y)
-
-        self._discriminator = k.Model(
-            inputs=[input_layer, input_encoded_layer],
-            outputs=[output, intermediate_layer],
-            name="bigan_discriminator",
         )
 
-    def call(self, inputs, training=False):
-        return self._discriminator(inputs, training=training)
+    def call(self, inputs, training=None, mask=None):
+        x, z = inputs
+
+        d_x = self._backbone(x)
+        d_z = self._encode_latent(z)
+
+        concat_input = k.layers.concatenate([d_x, d_z])
+
+        features = self._features(concat_input)
+        d_xz = self._output(features)
+
+        return d_xz, features
