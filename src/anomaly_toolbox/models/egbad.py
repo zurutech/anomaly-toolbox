@@ -71,6 +71,8 @@ class Encoder(k.Model):
             units=latent_space_dimension, kernel_initializer=KERNEL_INITIALIZER
         )(x)
 
+        x = tf.reshape(x, shape=(tf.shape(x)[0], 1, 1, x.shape[1]))
+
         self._encoder = k.Model(inputs=input_layer, outputs=x, name="bigan_encoder")
 
     def call(self, inputs, training=False):
@@ -101,7 +103,9 @@ class Decoder(k.Model):
         # output dimension is 28, 28
         l2_penalty = 0.0
 
-        input_layer = k.layers.Input(shape=(latent_space_dimension,))
+        # input_layer = k.layers.Input(shape=(latent_space_dimension,))
+
+        input_layer = k.layers.Input(shape=(1, 1, latent_space_dimension))
 
         x = k.layers.Dense(1024, activation="relu")(input_layer)
         x = k.layers.BatchNormalization(
@@ -179,7 +183,8 @@ class Discriminator(k.Model):
 
         # Input layers
         input_layer = k.layers.Input(shape=input_dimension)
-        input_encoded_layer = k.layers.Input(shape=(latent_space_dimension,))
+        # input_encoded_layer = k.layers.Input(shape=(latent_space_dimension,))
+        input_encoded_layer = k.layers.Input(shape=(1, 1, latent_space_dimension))
 
         # D(x): Convolution -> Convolution
         x = k.layers.Conv2D(
@@ -187,7 +192,6 @@ class Discriminator(k.Model):
             kernel_size=4,
             strides=2,
             kernel_initializer=KERNEL_INITIALIZER,
-            # padding="same",
         )(input_layer)
         x = k.layers.LeakyReLU(0.1)(x)
 
@@ -208,7 +212,7 @@ class Discriminator(k.Model):
         )(x)
         x = k.layers.LeakyReLU(0.2)(x)
         x = k.layers.BatchNormalization()(x)
-        x = k.layers.Flatten()(x)
+        # x = k.layers.Flatten()(x)
 
         # D(z): Dense
         z = k.layers.Dense(units=512, kernel_initializer=KERNEL_INITIALIZER)(
