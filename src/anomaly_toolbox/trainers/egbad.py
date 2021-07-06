@@ -10,8 +10,8 @@ import tensorflow.keras as k
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.losses.egbad import (adversarial_loss_fm,
                                           discriminator_loss, encoder_loss,
-                                          residual_loss)
-from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
+                                          residual_loss, generator_loss)
+from anomaly_toolbox.models.egbad_2 import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
 
@@ -37,15 +37,16 @@ class EGBAD(Trainer):
         self.encoder = Encoder(n_channels, self._hps["latent_vector_size"])
         self.generator = Decoder(n_channels, self._hps["latent_vector_size"])
 
+        self.generator.summary()
+        self.encoder.summary()
+
         # Instantiate and define with correct input shape
         fake_batch_size = (1,) + input_dimension
         fake_latent_vector = (1, self._hps["latent_vector_size"])
-        self.generator(tf.zeros(fake_latent_vector))
-        self.encoder(tf.zeros(fake_batch_size))
+        out_gen = self.generator(tf.zeros(fake_latent_vector))
+        out_enc = self.encoder(tf.zeros(fake_batch_size))
         self.discriminator([tf.zeros(fake_batch_size), tf.zeros(fake_latent_vector)])
 
-        self.generator.summary()
-        self.encoder.summary()
         self.discriminator.summary()
 
         # Optimizers
@@ -88,6 +89,7 @@ class EGBAD(Trainer):
         epochs: int,
         step_log_frequency: int = 100,
     ):
+        best_auprc = -1
         for epoch in tf.range(epochs):
             for batch in self._dataset.train:
                 x, _ = batch
@@ -145,7 +147,6 @@ class EGBAD(Trainer):
             # 2. Use the AUC object to compute the AUCROC with different
             # thresholds values on the anomaly score.
             self._auprc.reset_state()
-            best_auprc = -1
             for batch in self._dataset.test:
                 x, labels_test = batch
 
@@ -227,7 +228,8 @@ class EGBAD(Trainer):
 
             # Losses
             d_loss = discriminator_loss(d_x, d_g_z)
-            g_loss = adversarial_loss_fm(g_z_features, x_features)
+            # g_loss = adversarial_loss_fm(g_z_features, x_features)
+            g_loss = generator_loss(d_g_z)
             e_loss = encoder_loss(d_x)
 
         d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
