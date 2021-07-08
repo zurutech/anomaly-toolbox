@@ -1,12 +1,7 @@
 """Collection of various loss functions."""
 
-# TODO: Add residual loss
-# TODO: Refactor here all common type of loss
-
 import tensorflow as tf
-from tensorflow import keras
-
-__ALL__ = ["adversarial_loss", "feature_matching_loss"]
+from tensorflow import keras as k
 
 
 def adversarial_loss(d_real, d_gen):
@@ -20,10 +15,10 @@ def adversarial_loss(d_real, d_gen):
     Returns:
         Loss on real data + Loss on generated data.
     """
-    real_loss = keras.losses.binary_crossentropy(
+    real_loss = k.losses.binary_crossentropy(
         tf.ones_like(d_real), d_real, from_logits=True
     )
-    generated_loss = keras.losses.binary_crossentropy(
+    generated_loss = k.losses.binary_crossentropy(
         tf.zeros_like(d_gen), d_gen, from_logits=True
     )
     return real_loss + generated_loss
@@ -41,4 +36,12 @@ def feature_matching_loss(feature_a, feature_b):
         The value of the adversarial loss
 
     """
-    return keras.losses.mean_squared_error(feature_a, feature_b)
+    return tf.reduce_mean(tf.math.squared_difference(feature_a, feature_b))
+
+
+def residual_image(x, g_z):
+    return tf.math.abs(x - g_z)
+
+
+def residual_loss(x, g_z):
+    return tf.reduce_mean(residual_image(x, g_z))

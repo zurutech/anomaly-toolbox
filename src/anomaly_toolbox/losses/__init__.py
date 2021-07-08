@@ -1,3 +1,9 @@
-from .losses import adversarial_loss, feature_matching_loss
+from .losses import (adversarial_loss, feature_matching_loss, residual_image,
+                     residual_loss)
 
-__ALL__ = ["adversarial_loss", "feature_matching_loss"]
+__ALL__ = [
+    "adversarial_loss",
+    "feature_matching_loss",
+    "residual_loss",
+    "residual_image",
+]
