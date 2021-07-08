@@ -8,10 +8,29 @@ import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses import (adversarial_loss, feature_matching_loss,
-                                    residual_image, residual_loss)
 from anomaly_toolbox.models.anogan import Discriminator, Generator
 from anomaly_toolbox.trainers.trainer import Trainer
+
+
+def residual_image(x, g_z):
+    return tf.math.abs(x - g_z)
+
+
+def residual_loss(x, g_z):
+    return tf.reduce_mean(residual_image(x, g_z))
+
+
+class AdversarialLoss(k.losses.Loss):
+    def __init__(self):
+        super().__init__()
+        self._bce = k.losses.BinaryCrossentropy(from_logits=True)
+
+    def call(self, y_true, y_pred):
+        d_real = y_true
+        d_gen = y_pred
+        real_loss = self._bce(tf.ones_like(d_real), d_real)
+        generated_loss = self._bce(tf.zeros_like(d_gen), d_gen)
+        return real_loss + generated_loss
 
 
 class AnoGAN(Trainer):
@@ -49,6 +68,10 @@ class AnoGAN(Trainer):
         self.optimizer_z = k.optimizers.Adam(
             learning_rate=hps["learning_rate"], beta_1=0.5, beta_2=0.999
         )
+
+        # Losses
+        self._minmax = AdversarialLoss()
+        self._bce = k.losses.BinaryCrossentropy(from_logits=True)
 
         # Metrics
         self.epoch_d_loss_avg = k.metrics.Mean(name="epoch_discriminator_loss")
@@ -199,8 +222,8 @@ class AnoGAN(Trainer):
             d_x_hat, x_hat_features = self.discriminator(x_hat, training=True)
 
             # Losses
-            d_loss = adversarial_loss(d_x, d_x_hat)
-            g_loss = feature_matching_loss(x_hat_features, x_features)
+            d_loss = self._minmax(d_x, d_x_hat)
+            g_loss = self._bce(tf.ones_like(d_x_hat), d_x_hat)
 
         d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
         g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
@@ -231,8 +254,8 @@ class AnoGAN(Trainer):
                 x_hat = self.generator(tf.expand_dims(self._z_gamma, axis=[0]))
                 residual_score = residual_loss(x, x_hat)
                 _, x_features = self.discriminator(x, training=False)
-                _, x_hat_features = self.discriminator(x_hat, training=False)
-                discrimination_score = feature_matching_loss(x_hat_features, x_features)
+                d_x_hat, x_hat_features = self.discriminator(x_hat, training=False)
+                discrimination_score = self._bce(tf.ones_like(d_x_hat), d_x_hat)
 
                 anomaly_score = (
                     1 - self._lambda
