@@ -135,8 +135,6 @@ def main(
             )
             return 1
 
-        print(hps_path)
-        print(hps_tuning, grid_search, dataset_instance)
         experiment_instance.run(hps_tuning, grid_search, dataset_instance)
 
     return 0
