@@ -1,6 +1,4 @@
 """Implementation of the 28x28 input resolution models of AnoGAN."""
-
-import tensorflow as tf
 import tensorflow.keras as k
 
 
@@ -15,20 +13,26 @@ class Generator(k.Sequential):
             n_channels: depth of the input image
             input_dimension: the dimension of the latent vector.
         """
-
         super().__init__(
             [
-                k.layers.Input(shape=(input_dimension,)),
+                k.layers.InputLayer(input_shape=(input_dimension,)),
                 k.layers.Dense(7 * 7 * 128, use_bias=False),
                 k.layers.BatchNormalization(),
                 k.layers.LeakyReLU(0.2),
                 k.layers.Reshape((7, 7, 128)),
-                k.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same"),
-                k.layers.Conv2D(64, (2, 2), padding="same", use_bias=False),
+                k.layers.Conv2DTranspose(
+                    128, (2, 2), strides=(1, 1), use_bias=False, padding="same"
+                ),
                 k.layers.BatchNormalization(),
-                k.layers.ReLU(),
-                k.layers.Conv2DTranspose(64, (2, 2), strides=(2, 2), padding="same"),
-                k.layers.Conv2D(n_channels, (5, 5), padding="same"),
+                k.layers.LeakyReLU(0.2),
+                k.layers.Conv2DTranspose(
+                    64, (2, 2), strides=(2, 2), use_bias=False, padding="same"
+                ),
+                k.layers.BatchNormalization(),
+                k.layers.LeakyReLU(0.2),
+                k.layers.Conv2DTranspose(
+                    n_channels, (5, 5), strides=(2, 2), use_bias=False, padding="same"
+                ),
                 k.layers.Activation("tanh"),
             ]
         )
@@ -46,24 +50,25 @@ class Discriminator(k.Model):
 
         self._features = k.Sequential(
             [
-                k.layers.Input(shape=(28, 28, n_channels)),
-                k.layers.Conv2D(64, (5, 5), padding="same"),
+                k.layers.InputLayer(input_shape=(28, 28, n_channels)),
+                k.layers.Conv2D(32, (5, 5), padding="same", strides=(2, 2)),
                 k.layers.LeakyReLU(0.2),
-                k.layers.MaxPool2D(pool_size=(2, 2)),
+                k.layers.Dropout(0.5),
             ]
         )
 
         self._classifier = k.Sequential(
             [
-                k.layers.Conv2D(128, (5, 5), strides=(2, 2), padding="same"),
+                k.layers.InputLayer(input_shape=(14, 14, 32)),
+                k.layers.Conv2D(64, (5, 5), strides=(2, 2), padding="same"),
                 k.layers.LeakyReLU(0.2),
-                k.layers.MaxPool2D(pool_size=(2, 2)),
+                k.layers.Dropout(0.5),
                 k.layers.Flatten(),
                 k.layers.Dense(1),
             ]
         )
 
-    def call(self, inputs, training=False) -> tf.Tensor:
+    def call(self, inputs, training=False):
         """Forward pass.
         Args:
             inputs: input batch
