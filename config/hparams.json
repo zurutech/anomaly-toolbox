@@ -15,7 +15,7 @@
         "epochs": {
             "type": "Discrete",
             "values": [
-                15
+                50
             ]
         },
         "latent_vector_size": {
