@@ -16,8 +16,8 @@ def residual_image(x: tf.Tensor, g_z: tf.Tensor) -> tf.Tensor:
     """Residual image. The absolute value of the difference
     beteen x and g_z.
     Args:
-        x: the input image
-        g_z: the generated image.
+        x: The input image.
+        g_z: The generated image.
     Returns:
         The residual image.
     """
@@ -27,8 +27,8 @@ def residual_image(x: tf.Tensor, g_z: tf.Tensor) -> tf.Tensor:
 def residual_loss(x: tf.Tensor, g_z: tf.Tensor) -> tf.Tensor:
     """Residual loss. The mean of the residual image.
     Args:
-        x: the input image
-        g_z: the generated image.
+        x: The input image.
+        g_z: The generated image.
     Returns:
         a scalar, the computed mean.
     """
@@ -45,8 +45,8 @@ class AdversarialLoss(k.losses.Loss):
     def call(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
         """Compute the 2 cross entropies and sum them.
         Args:
-            y_true: MUST be D(x)
-            y_pred: MUST be D(G(z))
+            y_true: MUST be D(x).
+            y_pred: MUST be D(G(z)).
         Returns:
             bce(1, D(x)) + bce(0, D(G(z))
         """
@@ -73,14 +73,11 @@ class AnoGAN(Trainer):
         )
 
         # Models
-        # IMPORTANT! Call .numpy() otherwhise when using the depth as a tf.Tensor
-        # in creating the Keras model, we endup with Serialization issues.
-        depth = tf.shape(next(iter(dataset.train.take(1)))[0])[-1].numpy()
-        self.discriminator = Discriminator(n_channels=depth)
+        self.discriminator = Discriminator(n_channels=dataset.channels)
         self.generator = Generator(
-            n_channels=depth, input_dimension=hps["latent_vector_size"]
+            n_channels=dataset.channels, input_dimension=hps["latent_vector_size"]
         )
-        self._validate_models((28, 28, depth), hps["latent_vector_size"])
+        self._validate_models((28, 28, dataset.channels), hps["latent_vector_size"])
 
         # Optimizers
         self.optimizer_g = k.optimizers.Adam(
@@ -124,11 +121,16 @@ class AnoGAN(Trainer):
         self.generator(tf.zeros(fake_latent_vector), training=False)
         self.generator.summary()
 
-        fake_batch_size = (1,) + input_dimension
+        fake_batch_size = (1, *input_dimension)
         self.discriminator(tf.zeros(fake_batch_size), training=False)
         self.discriminator.summary()
 
-    def _select_and_save(self, current_auc):
+    def _select_and_save(self, current_auc: tf.Tensor) -> None:
+        """Saves the models (generator and discriminator) and the
+        AUC thresholds and value.
+        Args:
+            current_auc: The current value for the AUC.
+        """
         base_path = self._log_dir / "results" / "best"
         self.discriminator.save(
             str(base_path / "discriminator"),
@@ -161,8 +163,8 @@ class AnoGAN(Trainer):
         Also performs model selection on AUC using a subset of the test set.
 
         Args:
-            epochs: the number of training epochs.
-            step_log_frequency: number of steps to use for loging on CLI and
+            epochs: The number of training epochs.
+            step_log_frequency: Number of steps to use for loging on CLI and
                                 tensorboard.
         """
         best_auc = -1.0
@@ -206,14 +208,18 @@ class AnoGAN(Trainer):
             # Reset the metrics at the end of every epoch
             self._reset_keras_metrics()
 
-            # Model selection every 10 epochs because the test phase is
+            # Model selection every model_selection epochs because the test phase is
             # terribly slow.
-            if tf.not_equal(tf.math.mod(epoch, 10), 0):
+            model_selection = tf.constant(10)
+            if tf.not_equal(tf.math.mod(epoch, model_selection), 0):
                 continue
 
             # Model selection using a subset of the test set
-            validation_set = self._dataset.test_normal.take(1).concatenate(
-                self._dataset.test_anomalous.take(1)
+            # Keep "batches" number of batch of positives, them same for the negatives
+            # then unbatch them, and process every element indipendently.
+            batches = 1
+            validation_set = self._dataset.test_normal.take(batches).concatenate(
+                self._dataset.test_anomalous.take(batches)
             )
             # We need to search for z, hence we do this 1 element at a time (slow!)
             validation_set = validation_set.unbatch().batch(1)
@@ -225,7 +231,7 @@ class AnoGAN(Trainer):
                 # to produce x (from what the generator knows)
                 anomaly_score = self.latent_search(x)
                 self._auc.update_state(
-                    y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=[0])
+                    y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
                 )
                 with self._summary_writer.as_default():
                     g_z = self.generator(tf.expand_dims(self._z_gamma, axis=0))
@@ -253,11 +259,11 @@ class AnoGAN(Trainer):
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
         """Single training step.
         Args:
-            x: a batch of images
+            x: A batch of images.
         Returns:
-            x_hat: a batch of generated images
-            d_loss: the discriminator loss
-            g_loss: the generator loss
+            x_hat: A batch of generated images.
+            d_loss: The discriminator loss.
+            g_loss: The generator loss.
         """
         noise = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
@@ -293,8 +299,8 @@ class AnoGAN(Trainer):
         to find the value of z.
 
         Args:
-            x: test image
-            gamma: number of optimization steps
+            x: Test image.
+            gamma: Number of optimization steps.
         Returns:
             anomaly_score at the end of the gamma steps.
         """
@@ -306,7 +312,7 @@ class AnoGAN(Trainer):
 
             with tf.GradientTape(watch_accessed_variables=False) as tape:
                 tape.watch(self._z_gamma)
-                x_hat = self.generator(tf.expand_dims(self._z_gamma, axis=[0]))
+                x_hat = self.generator(tf.expand_dims(self._z_gamma, axis=0))
                 residual_score = residual_loss(x, x_hat)
 
                 d_x, _ = self.discriminator(x, training=False)
@@ -314,7 +320,7 @@ class AnoGAN(Trainer):
                 discrimination_score = self._minmax(d_x, d_x_hat)
 
                 anomaly_score = (
-                    1 - self._lambda
+                    1.0 - self._lambda
                 ) * residual_score + self._lambda * discrimination_score
 
             # we want to minimize the anomamly score

@@ -1,4 +1,7 @@
 """Implementation of the 28x28 input resolution models of AnoGAN."""
+from typing import Tuple
+
+import tensorflow as tf
 import tensorflow.keras as k
 
 
@@ -10,8 +13,8 @@ class Generator(k.Sequential):
     def __init__(self, n_channels: int = 3, input_dimension: int = 128):
         """Generator model.
         Args:
-            n_channels: depth of the input image
-            input_dimension: the dimension of the latent vector.
+            n_channels: Depth of the input image.
+            input_dimension: The dimension of the latent vector.
         """
         super().__init__(
             [
@@ -44,7 +47,7 @@ class Discriminator(k.Model):
     def __init__(self, n_channels: int = 3):
         """
         Args:
-            n_channels: depth of the input image
+            n_channels: Depth of the input image.
         """
         super().__init__()
 
@@ -68,16 +71,18 @@ class Discriminator(k.Model):
             ]
         )
 
-    def call(self, inputs, training=False):
+    def call(
+        self, inputs: tf.Tensor, training: bool = False
+    ) -> Tuple[tf.Tensor, tf.Tensor]:
         """Forward pass.
         Args:
-            inputs: input batch
-            training: toggle the model status from training to inference.
+            inputs: Input batch.
+            training: Toggle the model status from training to inference.
         Returns:
             out, features.
 
             out: The discriminator decision (single neuron, linear activation).
-            features: the feature vector computed
+            features: The feature vector computed.
         """
 
         features = self._features(inputs, training=training)
