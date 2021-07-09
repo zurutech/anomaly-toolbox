@@ -12,20 +12,44 @@ from anomaly_toolbox.models.anogan import Discriminator, Generator
 from anomaly_toolbox.trainers.trainer import Trainer
 
 
-def residual_image(x, g_z):
+def residual_image(x: tf.Tensor, g_z: tf.Tensor) -> tf.Tensor:
+    """Residual image. The absolute value of the difference
+    beteen x and g_z.
+    Args:
+        x: the input image
+        g_z: the generated image.
+    Returns:
+        The residual image.
+    """
     return tf.math.abs(x - g_z)
 
 
-def residual_loss(x, g_z):
+def residual_loss(x: tf.Tensor, g_z: tf.Tensor) -> tf.Tensor:
+    """Residual loss. The mean of the residual image.
+    Args:
+        x: the input image
+        g_z: the generated image.
+    Returns:
+        a scalar, the computed mean.
+    """
     return tf.reduce_mean(residual_image(x, g_z))
 
 
 class AdversarialLoss(k.losses.Loss):
+    """The Min-Max loss, used to train the discriminator."""
+
     def __init__(self):
         super().__init__()
         self._bce = k.losses.BinaryCrossentropy(from_logits=True)
 
-    def call(self, y_true, y_pred):
+    def call(self, y_true: tf.Tensor, y_pred: tf.Tensor) -> tf.Tensor:
+        """Compute the 2 cross entropies and sum them.
+        Args:
+            y_true: MUST be D(x)
+            y_pred: MUST be D(G(z))
+        Returns:
+            bce(1, D(x)) + bce(0, D(G(z))
+        """
         d_real = y_true
         d_gen = y_pred
         real_loss = self._bce(tf.ones_like(d_real), d_real)
@@ -131,7 +155,16 @@ class AnoGAN(Trainer):
         self,
         epochs: tf.Tensor,
         step_log_frequency: tf.Tensor,
-    ):
+    ) -> None:
+        """Train the model for the desider number of epochs.
+        Calls the `train_step` function in loop.
+        Also performs model selection on AUC using a subset of the test set.
+
+        Args:
+            epochs: the number of training epochs.
+            step_log_frequency: number of steps to use for loging on CLI and
+                                tensorboard.
+        """
         best_auc = -1.0
         for epoch in tf.range(epochs):
             for batch in self._dataset.train_normal:
@@ -216,15 +249,22 @@ class AnoGAN(Trainer):
     @tf.function
     def train_step(
         self,
-        x,
-    ):
-        """Single training step."""
+        x: tf.Tensor,
+    ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
+        """Single training step.
+        Args:
+            x: a batch of images
+        Returns:
+            x_hat: a batch of generated images
+            d_loss: the discriminator loss
+            g_loss: the generator loss
+        """
         noise = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
             x_hat = self.generator(noise, training=True)
 
-            d_x, x_features = self.discriminator(x, training=True)
-            d_x_hat, x_hat_features = self.discriminator(x_hat, training=True)
+            d_x, _ = self.discriminator(x, training=True)
+            d_x_hat, _ = self.discriminator(x_hat, training=True)
 
             # Losses
             d_loss = self._minmax(d_x, d_x_hat)
@@ -243,24 +283,35 @@ class AnoGAN(Trainer):
 
         return x_hat, d_loss, g_loss
 
-    def latent_search(self, x, gamma=tf.constant(500)):
+    def latent_search(
+        self, x: tf.Tensor, gamma: tf.Tensor = tf.constant(500)
+    ) -> tf.Tensor:
         """The test step searches in the latent space
         the z value that's likely to be mapped with the input image x.
         This step returns the value of the latent vector.
         NOTE: this is slow, since it performs gamma optimization steps
         to find the value of z.
+
+        Args:
+            x: test image
+            gamma: number of optimization steps
+        Returns:
+            anomaly_score at the end of the gamma steps.
         """
         tf.print("Searching z with ", gamma, " opt steps...")
 
         @tf.function
         def opt_step():
+            """Optimization steps that optimizes the value of self._z_gamma."""
+
             with tf.GradientTape(watch_accessed_variables=False) as tape:
                 tape.watch(self._z_gamma)
                 x_hat = self.generator(tf.expand_dims(self._z_gamma, axis=[0]))
                 residual_score = residual_loss(x, x_hat)
-                _, x_features = self.discriminator(x, training=False)
-                d_x_hat, x_hat_features = self.discriminator(x_hat, training=False)
-                discrimination_score = self._bce(tf.ones_like(d_x_hat), d_x_hat)
+
+                d_x, _ = self.discriminator(x, training=False)
+                d_x_hat, _ = self.discriminator(x_hat, training=False)
+                discrimination_score = self._minmax(d_x, d_x_hat)
 
                 anomaly_score = (
                     1 - self._lambda
