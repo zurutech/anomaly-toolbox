@@ -55,8 +55,6 @@ class AnoGANExperiment(Experiment):
 
         trainer = AnoGAN(dataset, hps, summary_writer, log_dir)
         trainer.train(
-            dataset=dataset.train_normal,
             epochs=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
-            test_dataset=dataset.test,
         )
