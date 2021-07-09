@@ -266,6 +266,7 @@ class AnoGAN(Trainer):
             self.optimizer_z.apply_gradients(zip(grads, [self._z_gamma]))
             return anomaly_score
 
+        self._z_gamma.assign(tf.zeros_like(self._z_gamma))
         for _ in tf.range(gamma):
             anomaly_score = opt_step()
         return anomaly_score
