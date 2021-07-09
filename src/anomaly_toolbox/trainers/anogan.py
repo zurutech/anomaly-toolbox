@@ -111,6 +111,11 @@ class AnoGAN(Trainer):
             overwrite=True,
             include_optimizer=False,
         )
+        self.generator.save(
+            str(base_path / "generator"),
+            overwrite=True,
+            include_optimizer=False,
+        )
 
         with open(base_path / "auc.json", "w") as fp:
             json.dump(
