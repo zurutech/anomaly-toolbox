@@ -97,10 +97,26 @@ class DeScarGAN(Trainer):
             return None
         return tf.clip_by_norm(grad, clip_norm=clip_norm)
 
+    def _select_and_save(self, threshold: tf.Tensor):
+        current_accuracy = self.accuracy.result()
+        base_path = self._log_dir / "results" / "best"
+        self.generator.save(
+            str(base_path / "generator"),
+            overwrite=True,
+            include_optimizer=False,
+        )
+        with open(base_path / "accuracy.json", "w") as fp:
+            json.dump(
+                {
+                    "value": float(current_accuracy),
+                    "threshold": float(threshold),
+                },
+                fp,
+            )
+
     # @tf.function
     def train(
         self,
-        batch_size: int,
         epochs: int,
         step_log_frequency: int = 100,
     ):
@@ -108,12 +124,7 @@ class DeScarGAN(Trainer):
 
         step_log_frequency = tf.convert_to_tensor(step_log_frequency, dtype=tf.int64)
         epochs = tf.convert_to_tensor(epochs, dtype=tf.int32)
-
-        # TODO: batch_size never used?
-        batch_size = tf.convert_to_tensor(batch_size, dtype=tf.int32)
-
         best_accuracy = -1.0
-
         for epoch in tf.range(epochs):
             for batch in self._dataset.train:
                 # Perform the train step
@@ -122,11 +133,10 @@ class DeScarGAN(Trainer):
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
                 self.epoch_g_loss_avg.update_state(g_loss)
-                step = self.d_optimizer.iterations
 
                 # step -1 because in train_step self.d_optimizer.iterations has been incremented
                 if tf.math.equal(
-                    tf.math.mod(step - 1, step_log_frequency),
+                    tf.math.mod(self.d_optimizer.iterations - 1, step_log_frequency),
                     tf.constant(0, tf.int64),
                 ):
                     x, y = batch
@@ -145,8 +155,12 @@ class DeScarGAN(Trainer):
                         x_ill = tf.expand_dims(x_ill, axis=0)
                         x_hat_ill = tf.expand_dims(x_hat_ill, axis=0)
                     with self._summary_writer.as_default():
-                        tf.summary.scalar("d_loss", d_loss, step=step)
-                        tf.summary.scalar("g_loss", g_loss, step=step)
+                        tf.summary.scalar(
+                            "d_loss", d_loss, step=self.d_optimizer.iterations
+                        )
+                        tf.summary.scalar(
+                            "g_loss", g_loss, step=self.d_optimizer.iterations
+                        )
 
                         tf.summary.image(
                             "healthy",
@@ -158,20 +172,20 @@ class DeScarGAN(Trainer):
                                 ],
                                 axis=2,
                             ),
-                            step=step,
+                            step=self.d_optimizer.iterations,
                         )
                         tf.summary.image(
                             "ill",
                             tf.concat(
                                 [x_ill, x_hat_ill, tf.abs(x_ill - x_hat_ill)], axis=2
                             ),
-                            step=step,
+                            step=self.d_optimizer.iterations,
                         )
                     tf.print(
                         "[",
                         epoch,
                         "] step: ",
-                        step,
+                        self.d_optimizer.iterations,
                         ": d_loss: ",
                         d_loss,
                         ", g_loss: ",
@@ -236,28 +250,17 @@ class DeScarGAN(Trainer):
                         tf.int32,
                     ),
                 )
-            current_accuracy = self.accuracy.result().numpy()
+            current_accuracy = self.accuracy.result()
             tf.print("Binary accuracy on validation set: ", current_accuracy)
-            if best_accuracy < current_accuracy:
-                base_path = self._log_dir / "results" / "best"
-                self.generator.save(
-                    str(base_path / "generator"),
-                    overwrite=True,
-                    include_optimizer=False,
-                )
-                with open(base_path / "accuracy.json", "w") as fp:
-                    json.dump(
-                        {
-                            "value": float(current_accuracy),
-                            "threshold": float(threshold.numpy()),
-                        },
-                        fp,
-                    )
 
+            if best_accuracy < current_accuracy:
+                tf.py_function(self._select_and_save, [threshold], [])
                 best_accuracy = current_accuracy
 
             with self._summary_writer.as_default():
-                tf.summary.scalar("accuracy", current_accuracy, step=step)
+                tf.summary.scalar(
+                    "accuracy", current_accuracy, step=self.d_optimizer.iterations
+                )
 
             # Reset the metrics at the end of every epoch
             self._reset_keras_metrics()
@@ -285,7 +288,7 @@ class DeScarGAN(Trainer):
         d_regularizer = tf.reduce_mean((ddx - 1.0) ** 2)
         return d_regularizer
 
-    # @tf.function
+    @tf.function
     def train_step(
         self,
         inputs: Tuple[tf.Tensor, tf.Tensor],
