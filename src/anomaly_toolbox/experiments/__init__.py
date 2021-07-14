@@ -14,7 +14,7 @@ __all__ = [
     "Experiment",
 ]
 
-__experiments = [
+__experiments__ = [
     "AnoGANExperiment",
     "DeScarGANExperiment",
     "EGBADExperiment",
