@@ -8,7 +8,7 @@ import tensorflow as tf
 from tensorflow import keras
 
 
-def discriminator_loss(d_real, d_gen):
+def discriminator_loss(d_real: tf.Tensor, d_gen: tf.Tensor) -> tf.Tensor:
     """
     Compute the discriminator loss.
 
@@ -28,13 +28,13 @@ def discriminator_loss(d_real, d_gen):
     return real_loss + generated_loss
 
 
-def encoder_loss(d_real):
+def encoder_loss(d_real: tf.Tensor) -> tf.Tensor:
     return keras.losses.binary_crossentropy(
         tf.zeros_like(d_real), d_real, from_logits=True
     )
 
 
-def smooth(label):
+def smooth(label: tf.Tensor) -> tf.Tensor:
     """
     Given label, a float tensor, returns a random value in it's neighborhood.
 
@@ -55,13 +55,13 @@ def smooth(label):
     )
 
 
-def adversarial_loss_bce(d_gen):
+def adversarial_loss_bce(d_gen: tf.Tensor) -> tf.Tensor:
     return keras.losses.binary_crossentropy(
         tf.ones_like(d_gen), d_gen, from_logits=True
     )
 
 
-def adversarial_loss_fm(feature_a, feature_b):
+def adversarial_loss_fm(feature_a: tf.Tensor, feature_b: tf.Tensor) -> tf.Tensor:
     """
     Compute the adversarial feature matching loss.
 
@@ -76,7 +76,7 @@ def adversarial_loss_fm(feature_a, feature_b):
     return keras.losses.mean_squared_error(feature_a, feature_b)
 
 
-def residual_loss(x, Gz):
+def residual_loss(x: tf.Tensor, Gz: tf.Tensor) -> tf.Tensor:
     """
     Return the residual loss between x and Gz.
 

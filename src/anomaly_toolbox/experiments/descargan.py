@@ -1,10 +1,9 @@
 """DeScarGAN experiment suite."""
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import tensorflow as tf
-from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.experiments.experiment import Experiment
@@ -32,14 +31,10 @@ class DeScarGANExperiment(Experiment):
     ) -> None:
         """Experiment execution - architecture specific.
         Args:
-            hps: dictionary with the parameters to use for the current run.
-            log_dir: where to store the tensorboard logs.
-            dataset: the dataset to use for model training and evaluation.
+            hps: Dictionary with the parameters to use for the current run.
+            log_dir: Where to store the tensorboard logs.
+            dataset: The dataset to use for model training and evaluation.
         """
-
-        # TODO: summary_writer never used?
-        summary_writer = tf.summary.create_file_writer(str(log_dir / "summaries"))
-
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
