@@ -31,9 +31,9 @@ class EGBADExperiment(Experiment):
     ) -> None:
         """Experiment execution - architecture specific.
         Args:
-            hps: dictionary with the parameters to use for the current run.
-            log_dir: where to store the tensorboard logs.
-            dataset: the dataset to use for model training and evaluation.
+            hps: Dictionary with the parameters to use for the current run.
+            log_dir: Where to store the tensorboard logs.
+            dataset: The dataset to use for model training and evaluation.
         """
         summary_writer = tf.summary.create_file_writer(str(log_dir))
         new_size = (28, 28)

@@ -2,9 +2,8 @@
 
 import itertools
 import json
-import sys
 from pathlib import Path
-from typing import List
+from typing import Callable, List
 
 import tensorflow as tf
 from tensorboard.plugins.hparams import api as hp
@@ -38,11 +37,9 @@ def hparam_parser(
         try:
             current_param = experiment_data[hparam_name]
         except KeyError:
-            print(
-                f"ERROR: '{hparam_name}' key does not exist inside the {hparams_path} file, "
-                f"please check."
+            raise KeyError(
+                f"{hparam_name} key does not exist inside the {hparams_path} file"
             )
-            sys.exit(1)
 
         # Get the 'hp' attribute taking the correct "type" from the JSON object (usually the
         # type is 'Discrete')
@@ -60,10 +57,10 @@ def hparam_parser(
 
 
 def grid_search(
-    experiment_func,
+    experiment_func: Callable,
     hps: List[hp.HParam],
     metrics: List[hp.Metric],
-    log_dir: str,
+    log_dir: Path,
 ) -> None:
     """
     Perform a grid search over the values of the hyperparameters passed.
@@ -84,22 +81,18 @@ def grid_search(
     # Build all combinations of the HPS values
     hps_values = []
     for entry in hps:
-        if type(entry == hp.Discrete):
+        if isinstance(entry.domain, hp.Discrete):
             hps_values.append(entry.domain.values)
         # TODO: Add support for other type of hps
     hps_combinations = itertools.product(*hps_values)
 
     # Then for each set of HPS run an experiment
-    session_num = 0
-    for hps_values in hps_combinations:
-        hps_run = {}
-        for i, entry in enumerate(hps):
-            hps_run[entry.name] = hps_values[i]
+    for session_num, hps_values in enumerate(hps_combinations):
+        hps_run = {entry.name: value for entry, value in zip(hps, hps_values)}
         run_name = f"run-{session_num}"
         print(f"--- Starting trial: {run_name} ---")
         print(hps_run)
         experiment_func(
             hps_run,
-            str(log_dir) + "/" + run_name,
+            str(log_dir / run_name),
         )
-        session_num += 1

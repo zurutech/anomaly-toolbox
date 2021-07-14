@@ -18,7 +18,7 @@ from anomaly_toolbox.hps import grid_search
     "chosen_experiment",
     "--experiment",
     help="Experiment to run.",
-    type=click.Choice(available_experiments.__ALL__, case_sensitive=True),
+    type=click.Choice(available_experiments.__experiments__, case_sensitive=True),
 )
 @click.option(
     "hps_path",
@@ -93,7 +93,7 @@ def main(
             logging.error(
                 "Dataset %s is not among the available: %s",
                 dataset,
-                ",".join(available_datasets.__ALL__),
+                ",".join(available_datasets.__datasets__),
             )
             return 1
 
@@ -117,7 +117,7 @@ def main(
     if chosen_experiment:
         experiments = [chosen_experiment]
     else:
-        experiments = available_experiments.__ALL__
+        experiments = available_experiments.__experiments__
 
     for experiment in experiments:
         log_dir = Path("logs") / experiment
@@ -131,12 +131,10 @@ def main(
             logging.error(
                 "Experiment %s is not among the available: %s",
                 experiment,
-                ",".join(available_experiments.__ALL__),
+                ",".join(available_experiments.__experiments__),
             )
             return 1
 
-        print(hps_path)
-        print(hps_tuning, grid_search, dataset_instance)
         experiment_instance.run(hps_tuning, grid_search, dataset_instance)
 
     return 0

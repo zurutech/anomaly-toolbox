@@ -28,7 +28,9 @@ class AnomalyDetectionDataset(abc.ABC):
         self._normal_label = tf.constant(0)
 
     @staticmethod
-    def linear_conversion(image, new_min, new_max):
+    def linear_conversion(
+        image: tf.Tensor, new_min: tf.Tensor, new_max: tf.Tensor
+    ) -> tf.Tensor:
         """Linearly convert image from it's actual value range,
         to a new range (new_min, new_max).
         Useful to change the values of an image in a new range.
@@ -43,14 +45,9 @@ class AnomalyDetectionDataset(abc.ABC):
         """
         old_min = tf.reduce_min(image)
         old_max = tf.reduce_max(image)
-        new_min = tf.convert_to_tensor(new_min)
-        new_max = tf.convert_to_tensor(new_max)
-        return tf.clip_by_value(
-            (((image - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min,
-            clip_value_min=new_min,
-            clip_value_max=new_max,
-        )
+        return (image - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
 
+    # WHy all these properties instead of attributes?
     @property
     def channels(self) -> int:
         """The last dimension of the elements in the dataset.
@@ -134,18 +131,19 @@ class AnomalyDetectionDataset(abc.ABC):
     ) -> None:
         """Configure the dataset. This makes all the object properties valid (not None).
         Args:
-            batch_size: the dataset batch size
+            batch_size: The dataset batch size
             new_size: (H,W) of the input image.
-            anomalous_label: if the raw dataset contains label, all the elements with
+            anomalous_label: If the raw dataset contains label, all the elements with
                              "anomalous_label" are converted to element of
                              self.anomalous_label class.
-            shuffle_buffer_size: buffer size used during the tf.data.Dataset.shuffle call.
-            cache: if True, cache the dataset
-            drop_remainder: if True, when the dataset size is not a multiple of the dataset size,
+            shuffle_buffer_size: Buffer size used during the tf.data.Dataset.shuffle call.
+            cache: If True, cache the dataset
+            drop_remainder: If True, when the dataset size is not a multiple of the dataset size,
                             the last batch will be dropped.
-            output_range: a Tuple (min, max) containing the output range to use for
+            output_range: A Tuple (min, max) containing the output range to use for
                           the processed images.
         """
+        raise NotImplementedError
 
     @staticmethod
     def pipeline(
@@ -190,26 +188,15 @@ class AnomalyDetectionDataset(abc.ABC):
             lambda image, label: (tf.cast(image, tf.float32) / 255.0, label)
         )
 
-        if output_range[0] != 0 and output_range[1] != 1:
-
-            def squash_fn():
-                """Closure. It returns a function(image,label), that applies
-                the AnomalyDetectionDataset.linear_conversion on the image
-                to squash the values in [output_range[0], output_range[1]].
-                The function returns the pair (new_image, label).
-                """
-
-                def fn(image, label):
-                    return (
-                        AnomalyDetectionDataset.linear_conversion(
-                            image, output_range[0], output_range[1]
-                        ),
-                        label,
-                    )
-
-                return fn
-
-            dataset = dataset.map(squash_fn())
+        if output_range != (0.0, 1.0):
+            dataset = dataset.map(
+                lambda image, label: (
+                    AnomalyDetectionDataset.linear_conversion(
+                        image, output_range[0], output_range[1]
+                    ),
+                    label,
+                )
+            )
 
         if is_training:
             dataset = dataset.shuffle(buffer_size=shuffle_buffer_size)

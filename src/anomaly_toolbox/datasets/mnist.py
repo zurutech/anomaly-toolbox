@@ -37,16 +37,16 @@ class MNIST(AnomalyDetectionDataset):
     ) -> None:
         """Configure the dataset. This makes all the object properties valid (not None).
         Args:
-            batch_size: the dataset batch size
+            batch_size: The dataset batch size.
             new_size: (H,W) of the input image.
-            anomalous_label: if the raw dataset contains label, all the elements with
+            anomalous_label: If the raw dataset contains label, all the elements with
                              "anomalous_label" are converted to element of
                              self.anomalous_label class.
-            shuffle_buffer_size: buffer size used during the tf.data.Dataset.shuffle call.
-            cache: if True, cache the dataset
-            drop_remainder: if True, when the dataset size is not a multiple of the dataset size,
+            shuffle_buffer_size: Buffer size used during the tf.data.Dataset.shuffle call.
+            cache: If True, cache the dataset.
+            drop_remainder: If True, when the dataset size is not a multiple of the dataset size,
                             the last batch will be dropped.
-            output_range: a Tuple (min, max) containing the output range to use
+            output_range: A Tuple (min, max) containing the output range to use
                           for the processed images.
         """
 
@@ -68,12 +68,12 @@ class MNIST(AnomalyDetectionDataset):
         # Train-data
         self._train_anomalous = (
             self._train_raw.filter(is_anomalous)
-            .map(lambda x, y: (x, self.anomalous_label))
+            .map(lambda x, _: (x, self.anomalous_label))
             .apply(pipeline_train)
         )
         self._train_normal = (
             self._train_raw.filter(is_normal)
-            .map(lambda x, y: (x, self.normal_label))
+            .map(lambda x, _: (x, self.normal_label))
             .apply(pipeline_train)
         )
         self._train = self._train_raw.map(
@@ -86,12 +86,12 @@ class MNIST(AnomalyDetectionDataset):
         # Test-data
         self._test_anomalous = (
             self._test_raw.filter(is_anomalous)
-            .map(lambda x, y: (x, self.anomalous_label))
+            .map(lambda x, _: (x, self.anomalous_label))
             .apply(pipeline_test)
         )
         self._test_normal = (
             self._test_raw.filter(is_normal)
-            .map(lambda x, y: (x, self.normal_label))
+            .map(lambda x, _: (x, self.normal_label))
             .apply(pipeline_test)
         )
 

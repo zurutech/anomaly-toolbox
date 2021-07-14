@@ -32,9 +32,12 @@ class DeScarGAN(Trainer):
         self._healthy_label = dataset.normal_label
 
         # Models
-        depth = tf.shape(next(iter(dataset.train.take(1)))[0])[-1]
-        self.generator = Generator(ill_label=self._ill_label, n_channels=depth)
-        self.discriminator = Discriminator(ill_label=self._ill_label, n_channels=depth)
+        self.generator = Generator(
+            ill_label=self._ill_label, n_channels=dataset.channels
+        )
+        self.discriminator = Discriminator(
+            ill_label=self._ill_label, n_channels=dataset.channels
+        )
 
         # Optimizers
         self.g_optimizer = k.optimizers.Adam(
@@ -126,25 +129,22 @@ class DeScarGAN(Trainer):
                     tf.math.mod(step - 1, step_log_frequency),
                     tf.constant(0, tf.int64),
                 ):
+                    x, y = batch
+
+                    healthy_idx = tf.squeeze(tf.where(tf.equal(y, self._healthy_label)))
+                    x_healthy = tf.gather(x, healthy_idx)
+                    x_hat_healthy = tf.gather(reconstructions, healthy_idx)
+                    if tf.equal(tf.rank(x_healthy), tf.constant(3)):
+                        x_healthy = tf.expand_dims(x_healthy, axis=0)
+                        x_hat_healthy = tf.expand_dims(x_hat_healthy, axis=0)
+
+                    ill_idx = tf.squeeze(tf.where(tf.equal(y, self._ill_label)))
+                    x_ill = tf.gather(x, ill_idx)
+                    x_hat_ill = tf.gather(reconstructions, ill_idx)
+                    if tf.equal(tf.rank(x_ill), tf.constant(3)):
+                        x_ill = tf.expand_dims(x_ill, axis=0)
+                        x_hat_ill = tf.expand_dims(x_hat_ill, axis=0)
                     with self._summary_writer.as_default():
-                        x, y = batch
-
-                        healthy_idx = tf.squeeze(
-                            tf.where(tf.equal(y, self._healthy_label))
-                        )
-                        x_healthy = tf.gather(x, healthy_idx)
-                        x_hat_healthy = tf.gather(reconstructions, healthy_idx)
-                        if tf.equal(tf.rank(x_healthy), tf.constant(3)):
-                            x_healthy = tf.expand_dims(x_healthy, axis=0)
-                            x_hat_healthy = tf.expand_dims(x_hat_healthy, axis=0)
-
-                        ill_idx = tf.squeeze(tf.where(tf.equal(y, self._ill_label)))
-                        x_ill = tf.gather(x, ill_idx)
-                        x_hat_ill = tf.gather(reconstructions, ill_idx)
-                        if tf.equal(tf.rank(x_ill), tf.constant(3)):
-                            x_ill = tf.expand_dims(x_ill, axis=0)
-                            x_hat_ill = tf.expand_dims(x_hat_ill, axis=0)
-
                         tf.summary.scalar("d_loss", d_loss, step=step)
                         tf.summary.scalar("g_loss", g_loss, step=step)
 
