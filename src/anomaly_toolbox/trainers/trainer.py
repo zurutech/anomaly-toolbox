@@ -53,6 +53,7 @@ class Trainer:
     @abstractmethod
     def hyperparameters() -> Set[str]:
         """List of the hyperparameters name used by the trainer."""
+        raise NotImplementedError
 
     def _reset_keras_metrics(self) -> None:
         """

@@ -1,10 +1,9 @@
 """EGBAD experiments suite."""
 
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 import tensorflow as tf
-from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.experiments.experiment import Experiment
@@ -32,9 +31,9 @@ class EGBADExperiment(Experiment):
     ) -> None:
         """Experiment execution - architecture specific.
         Args:
-            hps: dictionary with the parameters to use for the current run.
-            log_dir: where to store the tensorboard logs.
-            dataset: the dataset to use for model training and evaluation.
+            hps: Dictionary with the parameters to use for the current run.
+            log_dir: Where to store the tensorboard logs.
+            dataset: The dataset to use for model training and evaluation.
         """
         summary_writer = tf.summary.create_file_writer(str(log_dir))
         new_size = (28, 28)

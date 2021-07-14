@@ -5,4 +5,4 @@ from .descargan import DeScarGAN
 from .egbad import EGBAD
 from .ganomaly import GANomaly
 
-__ALL__ = ["AnoGAN", "EGBAD", "GANomaly", "DeScarGAN"]
+__all__ = ["AnoGAN", "EGBAD", "GANomaly", "DeScarGAN"]

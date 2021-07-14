@@ -14,7 +14,7 @@ class Experiment(abc.ABC):
     The Experiment class represent the basic class to be used by each experiment.
     """
 
-    def __init__(self, hparams_file_path: Path, log_dir: Path) -> None:
+    def __init__(self, hparams_file_path: Path, log_dir: Path):
         """
         Experiment ctor.
 
@@ -24,7 +24,7 @@ class Experiment(abc.ABC):
         """
         self._hparams_path = hparams_file_path
         self._log_dir = log_dir
-        self._hps = None
+        self._hps = []
 
     @property
     def log_dir(self) -> Path:
@@ -54,10 +54,11 @@ class Experiment(abc.ABC):
     ) -> None:
         """Experiment execution - architecture specific.
         Args:
-            hps: dictionary with the parameters to use for the current run.
-            log_dir: where to store the tensorboard logs.
-            dataset: the datset to use for model trainign and evaluation.
+            hps: Dictionary with the parameters to use for the current run.
+            log_dir: Where to store the tensorboard logs.
+            dataset: The datset to use for model training and evaluation.
         """
+        raise NotImplementedError
 
     def run(
         self,
@@ -66,24 +67,22 @@ class Experiment(abc.ABC):
         dataset: AnomalyDetectionDataset,
     ) -> None:
         """
-        Run training. It can run with hyperparameters tuning (hparams_tuning == True) or it can
+        Run training. It can run with hyperparameters tuning (hparams_tuning==True) or it can
         run without tuning (hparams_tuning==False). The tuning function is passed as a callable.
 
         Args:
             hparams_tuning: True if you want to enable tuning, False otherwise.
             hparams_func: The tuning function (e.g., grid_search) to use to do hyperparameters
             tuning.
-            dataset: the datset to use for model trainign and evaluation.
+            dataset: The datset to use for model training and evaluation.
         """
         if hparams_tuning:
             hparams_func(
                 self.experiment,
                 hps=self.hps,
-                log_dir=str(self.log_dir),
+                log_dir=self.log_dir,
                 dataset=dataset,
             )
         else:
-            hps_run = {}
-            for entry in self.hps:
-                hps_run[entry.name] = entry.domain.values[0]
+            hps_run = {entry.name: entry.domain.values[0] for entry in self.hps}
             self.experiment(hps_run, self.log_dir, dataset)

@@ -1,6 +1,5 @@
-from typing import List, Tuple, Type
+from typing import Union, Tuple
 
-import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 
@@ -15,7 +14,7 @@ class GANomalyPredictor:
         self.generator: GANomalyGenerator = tf.keras.models.load_model(generator_dir)
         self.discriminator = tf.keras.models.load_model(discriminator_dir)
 
-    def evaluate(self, dataset) -> Tuple[tf.Tensor, tf.Tensor]:
+    def evaluate(self, dataset: tf.data.Dataset) -> Tuple[tf.Tensor, tf.Tensor]:
         """Evaluate for benchmark."""
         anomaly_scores, labels = [], []
         for batch in dataset:
@@ -30,7 +29,9 @@ class GANomalyPredictor:
         return anomaly_scores, labels
 
     @tf.function
-    def evaluate_step(self, inputs):
+    def evaluate_step(
+        self, inputs: Tuple[tf.Tensor, tf.Tensor]
+    ) -> Tuple[tf.Tensor, tf.Tensor]:
         # x: [batch, height, width, channels]
         # y: [batch, 1]
         x, y = inputs
@@ -51,7 +52,9 @@ class GANomalyPredictor:
 
     @staticmethod
     @tf.function
-    def predict(generator: keras.Model, x, return_score_only: bool = True):
+    def predict(
+        generator: keras.Model, x: tf.Tensor, return_score_only: bool = True
+    ) -> Union[tf.Tensor, Tuple[tf.Tensor, tf.Tensor, tf.Tensor]]:
         # x: [batch, height, width, channels]
 
         # z: [batch, 1, 1, latent dimension]
@@ -71,15 +74,10 @@ class GANomalyPredictor:
             return x_hat, z_hat, z, a_score
 
     @staticmethod
-    def compute_anomaly_score(encoded_input, encoded_generated):
+    def compute_anomaly_score(
+        encoded_input: tf.Tensor, encoded_generated: tf.Tensor
+    ) -> tf.Tensor:
         anomaly_score = tf.reduce_mean(
             tf.math.squared_difference(encoded_input, encoded_generated), axis=1
         )
         return anomaly_score
-
-    @staticmethod
-    def weight_scores(a_scores):
-        a_scores_weighted = (a_scores - np.min(a_scores)) / (
-            np.max(a_scores) - np.min(a_scores)
-        )
-        return a_scores_weighted

@@ -10,13 +10,10 @@ from tensorboard.plugins.hparams import api as hp
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.losses import ganomaly as losses
 from anomaly_toolbox.models.ganomaly import (
-    GANomalyAssembler,
     GANomalyDiscriminator,
     GANomalyGenerator,
 )
 from anomaly_toolbox.trainers.trainer import Trainer
-
-__ALL__ = ["GANomaly"]
 
 
 class GANomaly(Trainer):
