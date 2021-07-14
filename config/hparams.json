@@ -59,13 +59,13 @@
         "epochs": {
             "type": "Discrete",
             "values": [
-                15
+                500
             ]
         },
         "latent_vector_size": {
             "type": "Discrete",
             "values": [
-                128
+                100
             ]
         },
         "learning_rate": {
