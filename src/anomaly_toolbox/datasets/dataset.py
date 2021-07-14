@@ -185,6 +185,7 @@ class AnomalyDetectionDataset(abc.ABC):
                 label,
             )
         )
+
         dataset = dataset.map(
             lambda image, label: (tf.cast(image, tf.float32) / 255.0, label)
         )
