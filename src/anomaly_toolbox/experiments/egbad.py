@@ -1,7 +1,7 @@
 """EGBAD experiments suite."""
 
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import tensorflow as tf
 
@@ -48,14 +48,12 @@ class EGBADExperiment(Experiment):
 
         trainer = EGBAD(
             dataset=dataset,
-            input_dimension=(new_size[0], new_size[1], dataset.channels),
             hps=hps,
             summary_writer=summary_writer,
             log_dir=log_dir,
         )
 
         trainer.train(
-            epoch=hps["epochs"],
+            epochs=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
-            test_dataset=dataset.test,
         )
