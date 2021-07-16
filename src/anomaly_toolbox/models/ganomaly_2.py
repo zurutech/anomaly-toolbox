@@ -3,7 +3,8 @@ import tensorflow.keras as k
 KERNEL_INITIALIZER = k.initializers.RandomNormal(mean=0.0, stddev=0.02)
 ALMOST_ONE = k.initializers.RandomNormal(mean=1.0, stddev=0.02)
 
-class Generator(k.Sequential):
+
+class Decoder(k.Sequential):
     def __init__(
         self,
         n_channels: int = 3,
@@ -66,6 +67,61 @@ class Generator(k.Sequential):
                     kernel_regularizer=k.regularizers.l2(l2_penalty),
                 ),
                 k.layers.Activation(k.activations.tanh),
+            ]
+        )
+
+
+class Encoder(k.Sequential):
+    def __init__(
+        self,
+        n_channels: int = 3,
+        latent_space_dimension: int = 100,
+        l2_penalty: float = 0.0,
+    ):
+        super().__init__(
+            [
+                k.layers.Input(shape=(28, 28, n_channels)),
+                k.layers.Conv2D(
+                    filters=64,
+                    kernel_size=(4, 4),
+                    strides=(2, 2),
+                    padding="same",
+                    kernel_initializer=KERNEL_INITIALIZER,
+                    use_bias=False,
+                    kernel_regularizer=k.regularizers.l2(l2_penalty),
+                ),
+                k.layers.LeakyReLU(0.2),
+                k.layers.Conv2D(
+                    filters=128,
+                    kernel_size=(4, 4),
+                    strides=(2, 2),
+                    padding="same",
+                    kernel_initializer=KERNEL_INITIALIZER,
+                    use_bias=False,
+                    kernel_regularizer=k.regularizers.l2(l2_penalty),
+                ),
+                k.layers.BatchNormalization(),
+                k.layers.LeakyReLU(0.2),
+                k.layers.Conv2D(
+                    filters=256,
+                    kernel_size=(4, 4),
+                    strides=(2, 2),
+                    padding="same",
+                    kernel_initializer=KERNEL_INITIALIZER,
+                    use_bias=False,
+                    kernel_regularizer=k.regularizers.l2(l2_penalty),
+                ),
+                k.layers.BatchNormalization(),
+                k.layers.LeakyReLU(0.2),
+                k.layers.Conv2D(
+                    filters=latent_space_dimension,
+                    kernel_size=(4, 4),
+                    strides=(1, 1),
+                    padding="valid",
+                    kernel_initializer=KERNEL_INITIALIZER,
+                    use_bias=False,
+                    kernel_regularizer=k.regularizers.l2(l2_penalty),
+                ),
             ]
         )
 
