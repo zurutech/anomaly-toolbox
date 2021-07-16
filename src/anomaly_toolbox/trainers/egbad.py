@@ -8,10 +8,10 @@ import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses.egbad import residual_loss, generator_bce, encoder_bce
+from anomaly_toolbox.losses.egbad import (AdversarialLoss, encoder_bce,
+                                          generator_bce, residual_loss)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
-from anomaly_toolbox.losses.egbad import AdversarialLoss
 
 
 class EGBAD(Trainer):
@@ -184,33 +184,32 @@ class EGBAD(Trainer):
                 # Update streaming auprc
                 self._auprc.update_state(labels_test, anomaly_scores[0])
 
-                # Save the model when AUPRC is the best
-                current_auprc = self._auprc.result()
+            # Save the model when AUPRC is the best
+            current_auprc = self._auprc.result()
+            if best_auprc < current_auprc:
 
-                if best_auprc < current_auprc:
+                tf.print("Best AUPRC on validation set: ", current_auprc)
 
-                    tf.print("Best AUPRC on validation set: ", current_auprc)
+                # Replace the best
+                best_auprc = current_auprc
 
-                    # Replace the best
-                    best_auprc = current_auprc
+                base_path = self._log_dir / "results" / "best"
 
-                    base_path = self._log_dir / "results" / "best"
+                self.generator.save(str(base_path / "generator"), overwrite=True)
 
-                    self.generator.save(str(base_path / "generator"), overwrite=True)
+                self.encoder.save(str(base_path / "encoder"), overwrite=True)
 
-                    self.encoder.save(str(base_path / "encoder"), overwrite=True)
+                self.discriminator.save(
+                    str(base_path / "discriminator"), overwrite=True
+                )
 
-                    self.discriminator.save(
-                        str(base_path / "discriminator"), overwrite=True
+                with open(base_path / "auprc.json", "w") as fp:
+                    json.dump(
+                        {
+                            "value": float(best_auprc),
+                        },
+                        fp,
                     )
-
-                    with open(base_path / "auprc.json", "w") as fp:
-                        json.dump(
-                            {
-                                "value": float(best_auprc),
-                            },
-                            fp,
-                        )
             # Reset metrics or the data will keep accruing becoming an average of ALL the epochs
             self._reset_keras_metrics()
 
