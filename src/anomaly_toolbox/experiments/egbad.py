@@ -8,7 +8,7 @@ import tensorflow as tf
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.experiments.experiment import Experiment
 from anomaly_toolbox.hps import hparam_parser
-from anomaly_toolbox.trainers.egbad import EGBAD
+from anomaly_toolbox.trainers import EGBAD
 
 
 class EGBADExperiment(Experiment):
@@ -44,7 +44,6 @@ class EGBADExperiment(Experiment):
             batch_size=hps["batch_size"],
             new_size=new_size,
             shuffle_buffer_size=hps["shuffle_buffer_size"],
-            output_range=(-1, 1),
         )
 
         trainer = EGBAD(
