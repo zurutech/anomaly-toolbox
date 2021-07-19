@@ -42,7 +42,7 @@ class GANomaly(Trainer):
         )
 
         # Encoder
-        self._encoder = Encoder(
+        self.encoder = Encoder(
             n_channels=n_channels,
             latent_space_dimension=self._hps["latent_vector_size"],
         )
@@ -51,7 +51,11 @@ class GANomaly(Trainer):
         self.discriminator(tf.zeros(fake_batch_size))
         self.discriminator.summary()
 
-        self.generator(tf.zeros(fake_batch_size))
+        self.encoder(tf.zeros(fake_batch_size))
+        self.encoder.summary()
+
+        fake_latent_vector = (1, self._hps["latent_vector_size"])
+        self.generator(tf.zeros(fake_latent_vector))
         self.generator.summary()
 
         # Losses
