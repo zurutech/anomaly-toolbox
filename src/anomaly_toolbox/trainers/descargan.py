@@ -79,6 +79,7 @@ class DeScarGAN(Trainer):
 
         # Constants
         self._zero = tf.constant(0.0)
+        self._zero_batch = tf.zeros((1, 1, 1, 1))
 
     @staticmethod
     def hyperparameters() -> Set[str]:
@@ -434,11 +435,11 @@ class DeScarGAN(Trainer):
                     x_ill_noisy, x_fake_ill_noisy, ill_labels
                 )
             else:
-                d_on_fake_ill = self._zero
+                d_on_fake_ill = self._zero_batch
                 d_gradient_penalty_ill = self._zero
-                x_fake_ill = self._zero
-                x_fake_ill_noisy = self._zero
-                x_ill_noisy = self._zero
+                x_fake_ill = self._zero_batch
+                x_fake_ill_noisy = self._zero_batch
+                x_ill_noisy = self._zero_batch
 
             d_loss_fake = (
                 tf.reduce_mean(d_on_fake_healthy) * percentage_healthy
