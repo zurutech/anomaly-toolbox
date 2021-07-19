@@ -213,18 +213,18 @@ class AnoGAN(Trainer):
             if tf.not_equal(tf.math.mod(epoch, model_selection), 0):
                 continue
 
-            # Model selection using a subset of the test set
+            # Model selection using a subset of the validation set (for speed reasons)
             # Keep "batches" number of batch of positives, them same for the negatives
             # then unbatch them, and process every element indipendently.
             batches = 1
-            validation_set = self._dataset.test_normal.take(batches).concatenate(
-                self._dataset.test_anomalous.take(batches)
-            )
+            validation_subset = self._dataset.validation_normal.take(
+                batches
+            ).concatenate(self._dataset.validation_anomalous.take(batches))
             # We need to search for z, hence we do this 1 element at a time (slow!)
-            validation_set = validation_set.unbatch().batch(1)
+            validation_subset = validation_subset.unbatch().batch(1)
 
             step = self.optimizer_d.iterations
-            for idx, sample in enumerate(validation_set):
+            for idx, sample in enumerate(validation_subset):
                 x, y = sample
                 # self._z_gamma should be the z value that's likely
                 # to produce x (from what the generator knows)

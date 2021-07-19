@@ -207,8 +207,7 @@ class DeScarGAN(Trainer):
             # 2. Use the threshold to classify the validation set (positive and negative)
             # 3. Compute the binary accuracy (we can use it since the dataset is perfectly balanced)
             self._mean.reset_state()
-            subset = self._dataset.test_normal.take(10)
-            for x, y in subset:
+            for x, y in self._dataset.validation_normal:
                 self._mean.update_state(
                     tf.reduce_mean(
                         tf.math.abs(self.generator((x, y), training=False) - x)
@@ -216,14 +215,14 @@ class DeScarGAN(Trainer):
                 )
             threshold = self._mean.result()
             tf.print(
-                "Reconstruction error on unseen subset (normal samples only): ",
+                "Reconstruction error on normal validation set: ",
                 threshold,
             )
 
             # reconstruction <= threshold => normal data (label 0)
-            for x, y in self._dataset.test_normal.skip(10).concatenate(
+            for x, y in self._dataset.test_normal.concatenate(
                 self._dataset.test_anomalous
-            ):  # skip first 10 used for threshold computation
+            ):
                 self.accuracy.update_state(
                     y_true=y,
                     y_pred=tf.cast(
