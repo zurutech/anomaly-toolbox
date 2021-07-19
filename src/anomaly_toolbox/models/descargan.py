@@ -49,12 +49,9 @@ class DeScarGANModel(k.Model):  # pylint: disable=too-many-ancestors
         Returns:
             The convolution operation correctly configured (as a keras model/layer).
         """
-
-        input_shape = (input_shape[2], input_shape[0], input_shape[1])
         return k.Sequential(
             [
                 k.layers.Conv2D(
-                    data_format="channels_first",
                     input_shape=input_shape,
                     filters=filters,
                     kernel_size=kernel_size,
@@ -65,7 +62,7 @@ class DeScarGANModel(k.Model):  # pylint: disable=too-many-ancestors
                 ),
             ]
             + (
-                [k.layers.BatchNormalization(momentum=momentum, axis=1)]
+                [k.layers.BatchNormalization(momentum=momentum)]
                 if self._batch_norm
                 else []
             )
@@ -98,24 +95,21 @@ class DeScarGANModel(k.Model):  # pylint: disable=too-many-ancestors
         Returns:
             The convolution operation correctly configured (as a keras model/layer).
         """
-        input_shape = (input_shape[2], input_shape[0], input_shape[1])
         if use_upsample:
             up_layer = k.Sequential(
                 [
-                    k.layers.UpSampling2D(data_format="channels_first"),
+                    k.layers.UpSampling2D(),
                     k.layers.Conv2D(
                         input_shape=input_shape,
                         filters=filters,
                         kernel_size=3,
                         strides=1,
                         padding="SAME",
-                        data_format="channels_first",
                     ),
                 ]
             )
         else:
             up_layer = k.layers.Conv2DTranspose(
-                data_format="channels_first",
                 input_shape=input_shape,
                 filters=filters,
                 kernel_size=kernel_size,
@@ -126,7 +120,7 @@ class DeScarGANModel(k.Model):  # pylint: disable=too-many-ancestors
         return k.Sequential(
             [
                 up_layer,
-                k.layers.BatchNormalization(momentum=momentum, axis=1),
+                k.layers.BatchNormalization(momentum=momentum),
                 activation_layer,
             ]
         )
@@ -140,7 +134,7 @@ class DeScarGANModel(k.Model):  # pylint: disable=too-many-ancestors
         Return:
             a new tensor with shape (N, H, W, C1 + C2)
         """
-        return tf.concat([upsampled, bypass], axis=1)
+        return tf.concat([upsampled, bypass], axis=-1)
 
 
 class Generator(DeScarGANModel):  # pylint: disable=too-many-ancestors
@@ -151,7 +145,7 @@ class Generator(DeScarGANModel):  # pylint: disable=too-many-ancestors
 
         self._ill_label = tf.constant(ill_label, dtype=tf.int32)
         self._c_dim = 2
-        self._max_pool_fn = lambda: k.layers.MaxPool2D(data_format="channels_first")
+        self._max_pool_fn = k.layers.MaxPool2D
 
         self._down0 = k.Sequential(
             [
@@ -243,10 +237,10 @@ class Generator(DeScarGANModel):  # pylint: disable=too-many-ancestors
         x, label = inputs
         one_hot_label = tf.one_hot(label, depth=2, dtype=tf.float32)
         condition = tf.tile(
-            one_hot_label[:, :, tf.newaxis, tf.newaxis],
-            [1, 1, tf.shape(x)[2], tf.shape(x)[3]],
+            one_hot_label[:, tf.newaxis, tf.newaxis, :],
+            [1, tf.shape(x)[1], tf.shape(x)[2], 1],
         )
-        x = tf.concat([x, condition], axis=1)
+        x = tf.concat([x, condition], axis=-1)
 
         input_0 = self._down0(x, training=training)
         input_1 = self._down1(input_0, training=training)
@@ -276,7 +270,7 @@ class Discriminator(DeScarGANModel):  # pylint: disable=too-many-ancestors
         super().__init__(batch_norm)
 
         self._ill_label = tf.constant(ill_label, dtype=tf.int32)
-        self._max_pool_fn = lambda: k.layers.MaxPool2D(data_format="channels_first")
+        self._max_pool_fn = k.layers.MaxPool2D
 
         self._encoder = k.Sequential(
             [
@@ -363,5 +357,5 @@ class Discriminator(DeScarGANModel):  # pylint: disable=too-many-ancestors
             lambda: self._conv_healthy(hidden, training=training),
         )
         conv = self._conv2(hidden, training=training)
-        pred = self._linearclass(tf.squeeze(conv, axis=[2, 3]), training=training)
+        pred = self._linearclass(tf.squeeze(conv, axis=[1, 2]), training=training)
         return out, pred

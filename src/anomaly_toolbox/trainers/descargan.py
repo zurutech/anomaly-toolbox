@@ -79,7 +79,6 @@ class DeScarGAN(Trainer):
 
         # Constants
         self._zero = tf.constant(0.0)
-        self._zero_batch = tf.constant(tf.zeros((1, 1, 1, 1)))
 
     @staticmethod
     def hyperparameters() -> Set[str]:
@@ -130,7 +129,6 @@ class DeScarGAN(Trainer):
             for batch in self._dataset.train:
                 # Perform the train step
                 d_loss, g_loss, reconstructions = self.train_step(batch)
-                # tf.print("after")
 
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
@@ -209,9 +207,7 @@ class DeScarGAN(Trainer):
             # 3. Compute the binary accuracy (we can use it since the dataset is perfectly balanced)
             self._mean.reset_state()
             subset = self._dataset.test_normal.take(10)
-            for batch in subset:
-                x, y = batch
-                x = tf.transpose(x, [0, 3, 1, 2])
+            for x, y in subset:
                 self._mean.update_state(
                     tf.reduce_mean(
                         tf.math.abs(self.generator((x, y), training=False) - x)
@@ -227,8 +223,6 @@ class DeScarGAN(Trainer):
             for x, y in self._dataset.test_normal.skip(10).concatenate(
                 self._dataset.test_anomalous
             ):  # skip first 10 used for threshold computation
-                x = tf.transpose(x, [0, 3, 1, 2])
-
                 self.accuracy.update_state(
                     y_true=y,
                     y_pred=tf.cast(
@@ -316,9 +310,7 @@ class DeScarGAN(Trainer):
 
         # Generate all the reconstruction for the current batch
         # outside of the tape since we need this only for logging
-
-        x = tf.transpose(x, [0, 3, 1, 2])
-        x_hat = self.generator((x, y), training=True)
+        x_hat = self.generator(inputs, training=True)
 
         # All the gathering of the inputs can be done outside of the tape
         # no need to track these operations for computing the gradient (save memory)
@@ -442,11 +434,11 @@ class DeScarGAN(Trainer):
                     x_ill_noisy, x_fake_ill_noisy, ill_labels
                 )
             else:
-                d_on_fake_ill = self._zero_batch
+                d_on_fake_ill = self._zero
                 d_gradient_penalty_ill = self._zero
-                x_fake_ill = self._zero_batch
-                x_fake_ill_noisy = self._zero_batch
-                x_ill_noisy = self._zero_batch
+                x_fake_ill = self._zero
+                x_fake_ill_noisy = self._zero
+                x_ill_noisy = self._zero
 
             d_loss_fake = (
                 tf.reduce_mean(d_on_fake_healthy) * percentage_healthy
