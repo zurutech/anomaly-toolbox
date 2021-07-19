@@ -125,12 +125,11 @@ class AnoGAN(Trainer):
         self.discriminator(tf.zeros(fake_batch_size), training=False)
         self.discriminator.summary()
 
-    def _select_and_save(self, current_auc: tf.Tensor) -> None:
+    def _select_and_save(self) -> None:
         """Saves the models (generator and discriminator) and the
         AUC thresholds and value.
-        Args:
-            current_auc: The current value for the AUC.
         """
+        current_auc = self._auc.result()
         base_path = self._log_dir / "results" / "best"
         self.discriminator.save(
             str(base_path / "discriminator"),
@@ -249,7 +248,7 @@ class AnoGAN(Trainer):
                 tf.print("Validation AUC: ", current_auc)
 
             if best_auc < current_auc:
-                tf.py_function(self._select_and_save, [current_auc], [])
+                tf.py_function(self._select_and_save, [], [])
                 best_auc = current_auc
 
     @tf.function
