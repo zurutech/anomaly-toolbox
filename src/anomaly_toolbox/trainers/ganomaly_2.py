@@ -8,7 +8,7 @@ import tensorflow.keras as keras
 from tensorboard.plugins.hparams import api as hp
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses import ganomaly as losses
+from anomaly_toolbox.losses.ganomaly import AdversarialLoss, generator_bce
 from anomaly_toolbox.models.ganomaly_2 import Discriminator, Encoder, Decoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -94,6 +94,8 @@ class GANomaly(Trainer):
             for metric in self._training_keras_metrics + self._test_keras_metrics
         }
 
+        self._minmax = AdversarialLoss(from_logits=True)
+
     @staticmethod
     def hyperparameters() -> Set[str]:
         """List of the hyperparameters name used by the trainer."""
@@ -107,22 +109,28 @@ class GANomaly(Trainer):
 
     def train(
         self,
-        epoch: int,
+        epochs: int,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
         step_log_frequency: int = 100,
         test_dataset: Optional[tf.data.Dataset] = None,
     ):
-        for epoch in range(epoch):
+        for epoch in range(epochs):
+
             training_data, training_reconstructions = [], []
+
             batch_size = None
-            for batch in self._dataset.train:
-                if not batch_size:
-                    batch_size = tf.shape(batch[0])[0]
+
+            for batch in self._dataset.train_normal:
+                input_data, _ = batch
+
+                # if not batch_size:
+                #     batch_size = tf.shape(batch[0])[0]
+
                 # Perform the train step
-                x, x_hat, d_loss, g_loss, e_loss = self.step_fn(
-                    batch,
+                x, x_hat, d_loss, g_loss, e_loss = self.train_step(
+                    input_data,
                     adversarial_loss_weight,
                     contextual_loss_weight,
                     enc_loss_weight,
@@ -200,7 +208,13 @@ class GANomaly(Trainer):
         testing_data, testing_reconstructions = [], []
         batch_size = None
         for input_data in test_iterator:
-            (test_x, test_x_hat, test_d_loss, test_g_loss, test_e_loss) = self.step_fn(
+            (
+                test_x,
+                test_x_hat,
+                test_d_loss,
+                test_g_loss,
+                test_e_loss,
+            ) = self.train_step(
                 input_data,
                 adversarial_loss_weight,
                 contextual_loss_weight,
@@ -234,54 +248,64 @@ class GANomaly(Trainer):
             self.test_e_loss_avg.result(),
         )
 
-    @tf.function
-    def step_fn(
+    # @tf.function
+    def train_step(
         self,
-        inputs,
+        x,
         adversarial_loss_weight: float,
         contextual_loss_weight: float,
         enc_loss_weight: float,
-        training: bool = True,
     ):
         """Single training step."""
-        x, y = inputs
         with tf.GradientTape(persistent=True) as tape:
-            # Reconstruction
-            z, x_hat, z_hat = self.generator(x, training=training)
 
             # Discriminator on real data
-            d_x, d_f_x = self.discriminator(x, training=training)
+            d_x, d_x_features = self.discriminator(x, is_training=True)
 
-            # Discriminator on x_hat
-            d_x_hat, d_f_x_hat = self.discriminator(x_hat, training=training)
+            # Reconstruct real data after encoding
+            e_x = self.encoder(x, is_training=True)
+            g_ex = self.decoder(e_x, is_training=True)
 
-            # g loss
-            adversarial_loss = losses.adversarial_loss_fm(d_f_x, d_f_x_hat)
-            e_loss = self._mse(z, z_hat)  # encoder loss
-            l1_loss = self._mae(x, x_hat)  # contextual
+            # Discriminator on the reconstructed real data g_ex
+            d_gex, d_gex_features = self.discriminator(g_ex, is_training=True)
+
+            # Encode the reconstructed real data g_ex
+            e_gex = self.encoder(g_ex, is_training=True)
+
+            # TODO CHECK IF THE OUTPUTS ARE FLATTENED
+
+            # Discriminator Loss
+            d_loss = self._minmax(d_x_features, d_gex_features)
+
+            # Generator Loss
+            # adversarial_loss = losses.adversarial_loss_fm(d_f_x, d_f_x_hat)
+            bce_g_loss = generator_bce(g_ex, from_logits=True)
+
+            l1_loss = self._mae(x, g_ex)  # contextual
+            e_loss = self._mse(e_x, e_gex)  # encoder loss
+
             g_loss = (
-                adversarial_loss_weight * adversarial_loss
+                adversarial_loss_weight * bce_g_loss
                 + contextual_loss_weight * l1_loss
                 + enc_loss_weight * e_loss
             )
 
-            # d loss
-            d_loss = losses.discriminator_loss(d_x, d_x_hat)
+        g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
+        d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
 
-        if training:
-            g_grads = tape.gradient(g_loss, self.generator.trainable_variables)
-            d_grads = tape.gradient(d_loss, self.discriminator.trainable_variables)
-
-            self.optimizer_ge.apply_gradients(
-                zip(g_grads, self.generator.trainable_variables)
+        self.optimizer_ge.apply_gradients(
+            zip(
+                g_grads,
+                self.generator.trainable_variables + self.encoder.trainable_variables,
             )
-            self.optimizer_d.apply_gradients(
-                zip(d_grads, self.discriminator.trainable_variables)
-            )
+        )
+        self.optimizer_d.apply_gradients(
+            zip(d_grads, self.discriminator.trainable_variables)
+        )
         del tape
         return (
             x,
-            x_hat,
+            g_ex,
             d_loss,
             g_loss,
             e_loss,
