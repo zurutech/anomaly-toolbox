@@ -18,12 +18,14 @@ class MNIST(AnomalyDetectionDataset):
 
     def __init__(self):
         super().__init__()
-        (self._train_raw, self._test_raw), _ = tfds.load(
+        (self._train_raw, self._test_raw), info = tfds.load(
             "mnist",
             split=["train", "test"],
             as_supervised=True,
             with_info=True,
         )
+
+        self._num_classes = info.features["label"].num_classes
 
     def configure(
         self,
@@ -65,23 +67,54 @@ class MNIST(AnomalyDetectionDataset):
         is_anomalous = lambda _, label: tf.equal(label, anomalous_label)
         is_normal = lambda _, label: tf.not_equal(label, anomalous_label)
 
+        # 60000 train images -> 6000 per class -> 600 per class in validation set
+        # do not overlap wih train images -> 6000 - 600 per class in training set
+        per_class_dataset = [
+            self._train_raw.filter(lambda _, y: tf.equal(y, label))
+            for label in tf.range(self._num_classes, dtype=tf.int64)
+        ]
+
+        validation_raw = per_class_dataset[0].take(600)
+        train_raw = per_class_dataset[0].skip(600)
+        for i in range(1, self._num_classes):
+            validation_raw = validation_raw.concatenate(per_class_dataset[i].take(600))
+            train_raw = train_raw.concatenate(per_class_dataset[i].skip(600))
+
         # Train-data
         self._train_anomalous = (
-            self._train_raw.filter(is_anomalous)
+            train_raw.filter(is_anomalous)
             .map(lambda x, _: (x, self.anomalous_label))
             .apply(pipeline_train)
         )
         self._train_normal = (
-            self._train_raw.filter(is_normal)
+            train_raw.filter(is_normal)
             .map(lambda x, _: (x, self.normal_label))
             .apply(pipeline_train)
         )
-        self._train = self._train_raw.map(
+        self._train = train_raw.map(
             lambda x, label: (
                 x,
                 tf.cast(tf.equal(label, anomalous_label), tf.int32),
             )
         ).apply(pipeline_train)
+
+        # Validation data
+        self._validation_anomalous = (
+            validation_raw.filter(is_anomalous)
+            .map(lambda x, _: (x, self.anomalous_label))
+            .apply(pipeline_test)
+        )
+        self._validation_normal = (
+            validation_raw.filter(is_normal)
+            .map(lambda x, _: (x, self.normal_label))
+            .apply(pipeline_test)
+        )
+        self._validation = validation_raw.map(
+            lambda x, label: (
+                x,
+                tf.cast(tf.equal(label, anomalous_label), tf.int32),
+            )
+        ).apply(pipeline_test)
 
         # Test-data
         self._test_anomalous = (

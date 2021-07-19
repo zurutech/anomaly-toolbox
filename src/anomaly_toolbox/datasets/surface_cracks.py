@@ -28,7 +28,8 @@ from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 
 class SurfaceCracks(AnomalyDetectionDataset):
     """Surface Crack Dataset (https://www.kaggle.com/arunrk7/surface-crack-detection).
-    20000 images for training (balanced), 20000 images for testing (balance).
+    20000 images for training (balanced), 5000 images for validation (balanced)
+    5000 images for testing (balanced).
     """
 
     def __init__(self, path: Path = Path("surface_cracks")):
@@ -58,10 +59,13 @@ class SurfaceCracks(AnomalyDetectionDataset):
         glob_ext = "*.jpg"
         all_normal = glob(str(self._path / "Negative" / glob_ext))
         all_normal_train = all_normal[:10000]
-        all_normal_test = all_normal[10000:]
+        all_normal_test = all_normal[10000:15000]
+        all_normal_validation = all_normal[15000:]
+
         all_anomalous = glob(str(self._path / "Positive" / glob_ext))
         all_anomalous_train = all_anomalous[:10000]
-        all_anomalous_test = all_anomalous[10000:]
+        all_anomalous_test = all_anomalous[10000:15000]
+        all_anomalous_validation = all_anomalous[15000:]
 
         self._train_raw = (
             tf.data.Dataset.from_tensor_slices(tf.convert_to_tensor(all_normal_train))
@@ -79,6 +83,18 @@ class SurfaceCracks(AnomalyDetectionDataset):
             .concatenate(
                 tf.data.Dataset.from_tensor_slices(
                     tf.convert_to_tensor(all_anomalous_test)
+                ).map(_read_and_map_fn(self.anomalous_label))
+            )
+        )
+
+        self._validation_raw = (
+            tf.data.Dataset.from_tensor_slices(
+                tf.convert_to_tensor(all_normal_validation)
+            )
+            .map(_read_and_map_fn(self.normal_label))
+            .concatenate(
+                tf.data.Dataset.from_tensor_slices(
+                    tf.convert_to_tensor(all_anomalous_validation)
                 ).map(_read_and_map_fn(self.anomalous_label))
             )
         )
@@ -167,6 +183,19 @@ class SurfaceCracks(AnomalyDetectionDataset):
             .apply(pipeline_train)
         )
         self._train = self._train_raw.apply(pipeline_train)
+
+        # Test-data
+        self._validation_anomalous = (
+            self._validation_raw.filter(is_anomalous)
+            .map(lambda x, _: (x, self.anomalous_label))
+            .apply(pipeline_test)
+        )
+        self._validation_normal = (
+            self._validation_raw.filter(is_normal)
+            .map(lambda x, _: (x, self.normal_label))
+            .apply(pipeline_test)
+        )
+        self._validation = self._validation_raw.apply(pipeline_test)
 
         # Test-data
         self._test_anomalous = (
