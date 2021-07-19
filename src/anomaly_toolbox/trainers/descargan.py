@@ -115,7 +115,7 @@ class DeScarGAN(Trainer):
                 fp,
             )
 
-    # @tf.function
+    @tf.function
     def train(
         self,
         epochs: int,
