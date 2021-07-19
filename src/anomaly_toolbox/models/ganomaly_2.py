@@ -26,7 +26,7 @@ class Decoder(k.Sequential):
                 k.layers.Reshape(target_shape=(7, 7, 128)),
                 k.layers.Conv2DTranspose(
                     filters=256,
-                    kernel_size=(4, 4),
+                    kernel_size=(2, 2),
                     strides=(1, 1),
                     padding="valid",
                     kernel_initializer=KERNEL_INITIALIZER,
@@ -58,9 +58,9 @@ class Decoder(k.Sequential):
                 k.layers.BatchNormalization(),
                 k.layers.LeakyReLU(0.2),
                 k.layers.Conv2DTranspose(
-                    filters=3,
+                    filters=n_channels,
                     kernel_size=(4, 4),
-                    strides=(2, 2),
+                    strides=(1, 1),
                     padding="same",
                     kernel_initializer=KERNEL_INITIALIZER,
                     use_bias=False,
@@ -135,12 +135,22 @@ class Discriminator(k.Model):
         super().__init__()
 
         # Input
-        input_dimension = (28, 28, n_channels)
+        input_dimension = (32, 32, n_channels)
         self._input_layer = k.layers.InputLayer(input_shape=input_dimension)
 
         self._backbone = k.Sequential(
             [
                 self._input_layer,
+                k.layers.Conv2D(
+                    filters=32,
+                    kernel_size=(4, 4),
+                    strides=(2, 2),
+                    padding="same",
+                    kernel_initializer=KERNEL_INITIALIZER,
+                    use_bias=False,
+                    kernel_regularizer=k.regularizers.l2(l2_penalty),
+                ),
+                k.layers.LeakyReLU(0.2),
                 k.layers.Conv2D(
                     filters=64,
                     kernel_size=(4, 4),
@@ -171,21 +181,29 @@ class Discriminator(k.Model):
                     kernel_regularizer=k.regularizers.l2(l2_penalty),
                 ),
                 k.layers.LeakyReLU(0.2),
+                k.layers.Flatten(),
             ]
         )
 
-        self._output = k.Sequential(
-            [
-                k.layers.Conv2D(
-                    filters=1,
-                    kernel_size=(4, 4),
-                    strides=(2, 2),
-                    padding="same",
-                    kernel_initializer=KERNEL_INITIALIZER,
-                    use_bias=False,
-                    kernel_regularizer=k.regularizers.l2(l2_penalty),
-                ),
-            ]
+        # self._output = k.Sequential(
+        #     [
+        #         k.layers.Conv2D(
+        #             filters=1,
+        #             kernel_size=(4, 4),
+        #             strides=(2, 2),
+        #             padding="same",
+        #             kernel_initializer=KERNEL_INITIALIZER,
+        #             use_bias=False,
+        #             kernel_regularizer=k.regularizers.l2(l2_penalty),
+        #         ),
+        #     ]
+        # )
+
+        self._output = k.layers.Dense(
+            1,
+            kernel_initializer=KERNEL_INITIALIZER,
+            use_bias=False,
+            kernel_regularizer=k.regularizers.l2(l2_penalty),
         )
 
     def call(self, inputs, training=True, mask=None):
