@@ -8,7 +8,7 @@ import tensorflow as tf
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.experiments.experiment import Experiment
 from anomaly_toolbox.hps import hparam_parser
-from anomaly_toolbox.trainers.ganomaly_2 import GANomaly
+from anomaly_toolbox.trainers.ganomaly import GANomaly
 
 
 class GANomalyExperiment(Experiment):
@@ -58,6 +58,3 @@ class GANomalyExperiment(Experiment):
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],
         )
-
-        # trainer.discriminator.save(str(log_dir / "discriminator"))
-        # trainer.generator.save(str(log_dir / "generator"))
