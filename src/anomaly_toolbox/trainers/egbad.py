@@ -148,7 +148,7 @@ class EGBAD(Trainer):
                     )
 
             # Epoch end
-            tf.print(epoch, " completed")
+            tf.print(epoch, "Epoch completed")
 
             # Model selection at the end of every epoch
             # Calculate AUPRC - Area Under Precision Recall Curve
