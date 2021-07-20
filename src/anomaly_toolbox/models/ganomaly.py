@@ -13,7 +13,7 @@ class Decoder(k.Sequential):
     ):
         super().__init__(
             [
-                k.layers.Input(shape=latent_space_dimension),
+                k.layers.InputLayer(input_shape=(latent_space_dimension,)),
                 k.layers.Dense(512, kernel_initializer=KERNEL_INITIALIZER),
                 k.layers.Dense(7 * 7 * 128, kernel_initializer=KERNEL_INITIALIZER),
                 k.layers.BatchNormalization(
@@ -80,7 +80,7 @@ class Encoder(k.Sequential):
     ):
         super().__init__(
             [
-                k.layers.Input(shape=(28, 28, n_channels)),
+                k.layers.InputLayer(input_shape=(32, 32, n_channels)),
                 k.layers.Conv2D(
                     filters=64,
                     kernel_size=(4, 4),
@@ -185,20 +185,6 @@ class Discriminator(k.Model):
                 k.layers.Flatten(),
             ]
         )
-
-        # self._output = k.Sequential(
-        #     [
-        #         k.layers.Conv2D(
-        #             filters=1,
-        #             kernel_size=(4, 4),
-        #             strides=(2, 2),
-        #             padding="same",
-        #             kernel_initializer=KERNEL_INITIALIZER,
-        #             use_bias=False,
-        #             kernel_regularizer=k.regularizers.l2(l2_penalty),
-        #         ),
-        #     ]
-        # )
 
         self._output = k.layers.Dense(
             1,
