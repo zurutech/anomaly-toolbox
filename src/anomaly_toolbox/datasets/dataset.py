@@ -15,12 +15,17 @@ class AnomalyDetectionDataset(abc.ABC):
     """
 
     def __init__(self):
+        self._train = None
         self._train_normal = None
         self._train_anomalous = None
+
+        self._test = None
         self._test_normal = None
         self._test_anomalous = None
-        self._train = None
-        self._test = None
+
+        self._validation = None
+        self._validation_normal = None
+        self._validation_anomalous = None
 
         self._channels = 1
 
@@ -47,7 +52,6 @@ class AnomalyDetectionDataset(abc.ABC):
         old_max = tf.reduce_max(image)
         return (image - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
 
-    # WHy all these properties instead of attributes?
     @property
     def channels(self) -> int:
         """The last dimension of the elements in the dataset.
@@ -98,25 +102,20 @@ class AnomalyDetectionDataset(abc.ABC):
         return self._test_anomalous
 
     @property
-    def datasets(
-        self,
-    ) -> Tuple[tf.data.Dataset, ...]:
-        """All the dataset in the following order:
-        - train_normal
-        - train_anomalous
-        - test_normal
-        - test_anomalous
-        - train
-        - test
-        """
-        return (
-            self.train_normal,
-            self.train_anomalous,
-            self.test_normal,
-            self.test_anomalous,
-            self.train,
-            self.test,
-        )
+    def validation(self) -> tf.data.Dataset:
+        """The complete test dataset with both positive and negatives.
+        The labels are always 2."""
+        return self._validation
+
+    @property
+    def validation_normal(self) -> tf.data.Dataset:
+        """Subset of the validation dataset: only positive."""
+        return self._validation_normal
+
+    @property
+    def validation_anomalous(self) -> tf.data.Dataset:
+        """Subset of the validation dataset: only negative."""
+        return self._validation_anomalous
 
     @abc.abstractmethod
     def configure(

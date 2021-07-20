@@ -121,6 +121,7 @@ def main(
 
     for experiment in experiments:
         log_dir = Path("logs") / experiment
+        log_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             experiment_instance = getattr(

@@ -125,12 +125,11 @@ class AnoGAN(Trainer):
         self.discriminator(tf.zeros(fake_batch_size), training=False)
         self.discriminator.summary()
 
-    def _select_and_save(self, current_auc: tf.Tensor) -> None:
+    def _select_and_save(self) -> None:
         """Saves the models (generator and discriminator) and the
         AUC thresholds and value.
-        Args:
-            current_auc: The current value for the AUC.
         """
+        current_auc = self._auc.result()
         base_path = self._log_dir / "results" / "best"
         self.discriminator.save(
             str(base_path / "discriminator"),
@@ -214,18 +213,18 @@ class AnoGAN(Trainer):
             if tf.not_equal(tf.math.mod(epoch, model_selection), 0):
                 continue
 
-            # Model selection using a subset of the test set
+            # Model selection using a subset of the validation set (for speed reasons)
             # Keep "batches" number of batch of positives, them same for the negatives
             # then unbatch them, and process every element indipendently.
             batches = 1
-            validation_set = self._dataset.test_normal.take(batches).concatenate(
-                self._dataset.test_anomalous.take(batches)
-            )
+            validation_subset = self._dataset.validation_normal.take(
+                batches
+            ).concatenate(self._dataset.validation_anomalous.take(batches))
             # We need to search for z, hence we do this 1 element at a time (slow!)
-            validation_set = validation_set.unbatch().batch(1)
+            validation_subset = validation_subset.unbatch().batch(1)
 
             step = self.optimizer_d.iterations
-            for idx, sample in enumerate(validation_set):
+            for idx, sample in enumerate(validation_subset):
                 x, y = sample
                 # self._z_gamma should be the z value that's likely
                 # to produce x (from what the generator knows)
@@ -249,7 +248,7 @@ class AnoGAN(Trainer):
                 tf.print("Validation AUC: ", current_auc)
 
             if best_auc < current_auc:
-                tf.py_function(self._select_and_save, [current_auc], [])
+                tf.py_function(self._select_and_save, [], [])
                 best_auc = current_auc
 
     @tf.function

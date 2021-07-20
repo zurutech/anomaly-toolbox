@@ -8,8 +8,12 @@ import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses.egbad import (AdversarialLoss, encoder_bce,
-                                          generator_bce, residual_loss)
+from anomaly_toolbox.losses.egbad import (
+    AdversarialLoss,
+    encoder_bce,
+    generator_bce,
+    residual_loss,
+)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -150,13 +154,13 @@ class EGBAD(Trainer):
             # Epoch end
             tf.print(epoch, "Epoch completed")
 
-            # Model selection at the end of every epoch
+            # Model selection at the end of every epoch on the validation set
             # Calculate AUPRC - Area Under Precision Recall Curve
             # 1. Compute the the anomaly score
             # 2. Use the AUC object to compute the AUPRC with different
             # thresholds values on the anomaly score.
             self._auprc.reset_state()
-            for batch in self._dataset.test:
+            for batch in self._dataset.validation:
                 x, labels_test = batch
 
                 e_x = self.encoder(x, training=False)

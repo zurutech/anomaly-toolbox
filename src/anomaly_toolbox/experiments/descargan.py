@@ -46,7 +46,6 @@ class DeScarGANExperiment(Experiment):
         summary_writer = tf.summary.create_file_writer(str(log_dir))
         trainer = DeScarGAN(dataset, hps, summary_writer, log_dir)
         trainer.train(
-            batch_size=hps["batch_size"],
             epochs=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
         )
