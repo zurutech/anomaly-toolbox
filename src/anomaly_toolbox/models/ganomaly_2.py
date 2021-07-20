@@ -122,6 +122,7 @@ class Encoder(k.Sequential):
                     use_bias=False,
                     kernel_regularizer=k.regularizers.l2(l2_penalty),
                 ),
+                k.layers.Flatten(),
             ]
         )
 
@@ -203,7 +204,7 @@ class Discriminator(k.Model):
             1,
             kernel_initializer=KERNEL_INITIALIZER,
             use_bias=False,
-            kernel_regularizer=k.regularizers.l2(l2_penalty),
+            # kernel_regularizer=k.regularizers.l2(l2_penalty),
         )
 
     def call(self, inputs, training=True, mask=None):
