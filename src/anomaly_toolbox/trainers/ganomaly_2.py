@@ -264,7 +264,7 @@ class GANomaly(Trainer):
 
             # Reconstruct real data after encoding
             e_x = self.encoder(x, is_training=True)
-            g_ex = self.decoder(e_x, is_training=True)
+            g_ex = self.generator(e_x, is_training=True)
 
             # Discriminator on the reconstructed real data g_ex
             d_gex, d_gex_features = self.discriminator(g_ex, is_training=True)
