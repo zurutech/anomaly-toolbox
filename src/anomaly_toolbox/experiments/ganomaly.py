@@ -30,6 +30,7 @@ class GANomalyExperiment(Experiment):
         self, hps: Dict, log_dir: Path, dataset: AnomalyDetectionDataset
     ) -> None:
         """Experiment execution - architecture specific.
+
         Args:
             hps: Dictionary with the parameters to use for the current run.
             log_dir: Where to store the tensorboard logs.
@@ -47,7 +48,6 @@ class GANomalyExperiment(Experiment):
         )
         trainer = GANomaly(
             dataset=dataset,
-            # input_dimension=(new_size[0], new_size[1], dataset.channels),
             hps=hps,
             summary_writer=summary_writer,
             log_dir=log_dir,
