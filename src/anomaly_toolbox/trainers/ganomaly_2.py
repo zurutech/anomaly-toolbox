@@ -73,20 +73,20 @@ class GANomaly(Trainer):
         # Training Metrics
         self.epoch_d_loss_avg = tf.keras.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = tf.keras.metrics.Mean(name="epoch_generator_loss")
-        self.epoch_e_loss_avg = tf.keras.metrics.Mean(name="epoch_encoder_loss")
+        # self.epoch_e_loss_avg = tf.keras.metrics.Mean(name="epoch_encoder_loss")
         self._training_keras_metrics = [
             self.epoch_d_loss_avg,
             self.epoch_g_loss_avg,
-            self.epoch_e_loss_avg,
+            # self.epoch_e_loss_avg,
         ]
         # Test Metrics
         self.test_d_loss_avg = tf.keras.metrics.Mean(name="test_discriminator_loss")
         self.test_g_loss_avg = tf.keras.metrics.Mean(name="test_generator_loss")
-        self.test_e_loss_avg = tf.keras.metrics.Mean(name="test_encoder_loss")
+        # self.test_e_loss_avg = tf.keras.metrics.Mean(name="test_encoder_loss")
         self._test_keras_metrics = [
             self.test_d_loss_avg,
             self.test_g_loss_avg,
-            self.test_e_loss_avg,
+            # self.test_e_loss_avg,
         ]
 
         self.keras_metrics = {
@@ -123,60 +123,86 @@ class GANomaly(Trainer):
             batch_size = None
 
             for batch in self._dataset.train_normal:
-                input_data, _ = batch
+                x, _ = batch
 
                 # if not batch_size:
                 #     batch_size = tf.shape(batch[0])[0]
 
                 # Perform the train step
-                x, x_hat, d_loss, g_loss, e_loss = self.train_step(
-                    input_data,
+                g_z, g_ex, d_loss, g_loss, e_loss = self.train_step(
+                    x,
                     adversarial_loss_weight,
                     contextual_loss_weight,
                     enc_loss_weight,
-                    training=True,
                 )
 
                 # Update the losses metrics
                 self.epoch_d_loss_avg.update_state(d_loss)
                 self.epoch_g_loss_avg.update_state(g_loss)
-                self.epoch_e_loss_avg.update_state(e_loss)
+                # self.epoch_e_loss_avg.update_state(e_loss)
+
                 step = self.optimizer_d.iterations.numpy()
                 learning_rate = self.optimizer_ge.learning_rate.numpy()
 
-                # Save the input images and their reconstructions for later use
+                # # Save the input images and their reconstructions for later use
+                # if step % step_log_frequency == 0:
+                #     with self._summary_writer.as_default():
+                #         tf.summary.scalar("learning_rate", learning_rate, step=step)
+                #
+                #     tf.print(
+                #         "Step {:04d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f}, lr: {:.5f}".format(
+                #             step,
+                #             self.epoch_d_loss_avg.result(),
+                #             self.epoch_g_loss_avg.result(),
+                #             # self.epoch_e_loss_avg.result(),
+                #             learning_rate,
+                #         )
+                #     )
 
-                training_data.append(x)
-                training_reconstructions.append(x_hat)
-
-                if step % step_log_frequency == 0:
+                if tf.equal(tf.math.mod(step, step_log_frequency), 0):
                     with self._summary_writer.as_default():
                         tf.summary.scalar("learning_rate", learning_rate, step=step)
+                        tf.summary.image(
+                            "x/g_z/g_ex",
+                            tf.concat([x, g_z, g_ex], axis=2),
+                            step=step,
+                        )
+                        tf.summary.scalar(
+                            "d_loss",
+                            self.epoch_d_loss_avg.result(),
+                            step=step,
+                        )
+                        tf.summary.scalar(
+                            "g_loss",
+                            self.epoch_g_loss_avg.result(),
+                            step=step,
+                        )
 
                     tf.print(
-                        "Step {:04d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f}, lr: {:.5f}".format(
+                        "Step {:04d}: d_loss: {:.3f}, ge_loss: {:.3f},"
+                        "lr: {:.5f}".format(
                             step,
                             self.epoch_d_loss_avg.result(),
                             self.epoch_g_loss_avg.result(),
-                            self.epoch_e_loss_avg.result(),
+                            # self.epoch_e_loss_avg.result(),
                             learning_rate,
                         )
                     )
             # |--------------------|
             # | Epoch-wise logging |
             # |--------------------|
-            self.log(
-                input_data=training_data[-1][:batch_size],
-                reconstructions=training_reconstructions[-1][:batch_size],
-                summary_writer=self._summary_writer,
-                step=step,
-                epoch=epoch,
-                d_loss_metric=self.epoch_d_loss_avg,
-                g_loss_metric=self.epoch_g_loss_avg,
-                e_loss_metric=self.epoch_e_loss_avg,
-                max_images_to_log=batch_size,
-                training=True,
-            )
+            # self.log(
+            #     input_data=training_data[-1][:batch_size],
+            #     reconstructions=training_reconstructions[-1][:batch_size],
+            #     summary_writer=self._summary_writer,
+            #     step=step,
+            #     epoch=epoch,
+            #     d_loss_metric=self.epoch_d_loss_avg,
+            #     g_loss_metric=self.epoch_g_loss_avg,
+            #     e_loss_metric=self.epoch_e_loss_avg,
+            #     max_images_to_log=batch_size,
+            #     training=True,
+            # )
 
             # |-----------------------|
             # | Perform the test step |
@@ -256,21 +282,27 @@ class GANomaly(Trainer):
         contextual_loss_weight: float,
         enc_loss_weight: float,
     ):
+
+        # Random noise
+        z = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
+
         """Single training step."""
         with tf.GradientTape(persistent=True) as tape:
+            # Generator reconstruction from random noise
+            g_z = self.generator(z, training=False)
 
             # Discriminator on real data
-            d_x, d_x_features = self.discriminator(x, is_training=True)
+            d_x, d_x_features = self.discriminator(x, training=True)
 
             # Reconstruct real data after encoding
-            e_x = self.encoder(x, is_training=True)
-            g_ex = self.generator(e_x, is_training=True)
+            e_x = self.encoder(x, training=True)
+            g_ex = self.generator(e_x, training=True)
 
             # Discriminator on the reconstructed real data g_ex
-            d_gex, d_gex_features = self.discriminator(g_ex, is_training=True)
+            d_gex, d_gex_features = self.discriminator(g_ex, training=True)
 
             # Encode the reconstructed real data g_ex
-            e_gex = self.encoder(g_ex, is_training=True)
+            e_gex = self.encoder(g_ex, training=True)
 
             # TODO CHECK IF THE OUTPUTS ARE FLATTENED
 
@@ -304,115 +336,115 @@ class GANomaly(Trainer):
         )
         del tape
         return (
-            x,
+            g_z,
             g_ex,
             d_loss,
             g_loss,
             e_loss,
         )
 
-    def log(
-        self,
-        input_data,
-        reconstructions,
-        summary_writer,
-        step: int,
-        epoch: int,
-        d_loss_metric,
-        g_loss_metric,
-        e_loss_metric,
-        max_images_to_log: int,
-        training: bool = True,
-    ) -> None:
-        """
-        Log data (images, losses, learning rate) to TensorBoard.
+    # def log(
+    #     self,
+    #     input_data,
+    #     reconstructions,
+    #     summary_writer,
+    #     step: int,
+    #     epoch: int,
+    #     d_loss_metric,
+    #     g_loss_metric,
+    #     e_loss_metric,
+    #     max_images_to_log: int,
+    #     training: bool = True,
+    # ) -> None:
+    #     """
+    #     Log data (images, losses, learning rate) to TensorBoard.
+    #
+    #     Args:
+    #         input_data: Input images
+    #         reconstructions: Reconstructions
+    #         summary_writer: TensorFlow SummaryWriter to use for logging
+    #         step: Current step
+    #         epoch: Current epoch
+    #         d_loss_metric: Keras Metric
+    #         g_loss_metric: Keras Metric
+    #         e_loss_metric: Keras Metric
+    #         max_images_to_log: Maximum amount of images that will be logged
+    #         training: True for logging training, False for logging test epoch results
+    #
+    #     """
+    #     with summary_writer.as_default():
+    #         hp.hparams(self._hps)
+    #         # |-----------------|
+    #         # | Logging scalars |
+    #         # |-----------------|
+    #         tf.summary.scalar(
+    #             "epoch_d_loss" if training else "test_epoch_d_loss",
+    #             d_loss_metric.result(),
+    #             step=step,
+    #         )
+    #         tf.summary.scalar(
+    #             "epoch_g_loss" if training else "test_epoch_g_loss",
+    #             g_loss_metric.result(),
+    #             step=step,
+    #         )
+    #         tf.summary.scalar(
+    #             "epoch_e_loss" if training else "test_epoch_e_loss",
+    #             e_loss_metric.result(),
+    #             step=step,
+    #         )
+    #         # |----------------|
+    #         # | Logging images |
+    #         # |----------------|
+    #         tf.summary.image(
+    #             "training_data" if training else "test_data",
+    #             input_data,
+    #             max_outputs=max_images_to_log,
+    #             step=step,
+    #         )
+    #         tf.summary.image(
+    #             "training_reconstructions" if training else "test_reconstructions",
+    #             reconstructions,
+    #             max_outputs=max_images_to_log,
+    #             step=step,
+    #         )
+    #     # -----
+    #     print("--------------------------------")
+    #     print(
+    #         "{}: {:03d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f},".format(
+    #             "EPOCH" if training else "TEST",
+    #             epoch,
+    #             d_loss_metric.result(),
+    #             g_loss_metric.result(),
+    #             e_loss_metric.result(),
+    #         )
+    #     )
+    #     print("--------------------------------")
 
-        Args:
-            input_data: Input images
-            reconstructions: Reconstructions
-            summary_writer: TensorFlow SummaryWriter to use for logging
-            step: Current step
-            epoch: Current epoch
-            d_loss_metric: Keras Metric
-            g_loss_metric: Keras Metric
-            e_loss_metric: Keras Metric
-            max_images_to_log: Maximum amount of images that will be logged
-            training: True for logging training, False for logging test epoch results
-
-        """
-        with summary_writer.as_default():
-            hp.hparams(self._hps)
-            # |-----------------|
-            # | Logging scalars |
-            # |-----------------|
-            tf.summary.scalar(
-                "epoch_d_loss" if training else "test_epoch_d_loss",
-                d_loss_metric.result(),
-                step=step,
-            )
-            tf.summary.scalar(
-                "epoch_g_loss" if training else "test_epoch_g_loss",
-                g_loss_metric.result(),
-                step=step,
-            )
-            tf.summary.scalar(
-                "epoch_e_loss" if training else "test_epoch_e_loss",
-                e_loss_metric.result(),
-                step=step,
-            )
-            # |----------------|
-            # | Logging images |
-            # |----------------|
-            tf.summary.image(
-                "training_data" if training else "test_data",
-                input_data,
-                max_outputs=max_images_to_log,
-                step=step,
-            )
-            tf.summary.image(
-                "training_reconstructions" if training else "test_reconstructions",
-                reconstructions,
-                max_outputs=max_images_to_log,
-                step=step,
-            )
-        # -----
-        print("--------------------------------")
-        print(
-            "{}: {:03d}: d_loss: {:.3f}, g_loss: {:.3f}, e_loss: {:.3f},".format(
-                "EPOCH" if training else "TEST",
-                epoch,
-                d_loss_metric.result(),
-                g_loss_metric.result(),
-                e_loss_metric.result(),
-            )
-        )
-        print("--------------------------------")
-
-    # | ----------------- |
-    # | Trainer functions |
-    # | ----------------- |
-
-    def train_mnist(
-        self,
-        epoch: int,
-        adversarial_loss_weight: float,
-        contextual_loss_weight: float,
-        enc_loss_weight: float,
-    ) -> None:
-        """
-        Train GANomaly on MNIST dataset with one abnormal class.
-
-        Args:
-            epoch: Number of epochs.
-            adversarial_loss_weight: weight for the adversarial loss.
-            contextual_loss_weight: weight for the contextual loss (reconstruction loss).
-            enc_loss_weight: weight for the encoder loss.
-        """
-        self.train(
-            dataset=self._dataset.train_normal,
-            epoch=epoch,
-            adversarial_loss_weight=adversarial_loss_weight,
-            contextual_loss_weight=contextual_loss_weight,
-            enc_loss_weight=enc_loss_weight,
-            test_dataset=self._dataset.test_normal,
-        )
+    # # | ----------------- |
+    # # | Trainer functions |
+    # # | ----------------- |
+    #
+    # def train_mnist(
+    #     self,
+    #     epoch: int,
+    #     adversarial_loss_weight: float,
+    #     contextual_loss_weight: float,
+    #     enc_loss_weight: float,
+    # ) -> None:
+    #     """
+    #     Train GANomaly on MNIST dataset with one abnormal class.
+    #
+    #     Args:
+    #         epoch: Number of epochs.
+    #         adversarial_loss_weight: weight for the adversarial loss.
+    #         contextual_loss_weight: weight for the contextual loss (reconstruction loss).
+    #         enc_loss_weight: weight for the encoder loss.
+    #     """
+    #     self.train(
+    #         dataset=self._dataset.train_normal,
+    #         epoch=epoch,
+    #         adversarial_loss_weight=adversarial_loss_weight,
+    #         contextual_loss_weight=contextual_loss_weight,
+    #         enc_loss_weight=enc_loss_weight,
+    #         test_dataset=self._dataset.test_normal,
+    #     )
