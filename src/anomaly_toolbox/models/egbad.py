@@ -185,7 +185,6 @@ class Decoder(k.Sequential):
                     momentum=0.1,
                     epsilon=1e-5,
                 ),
-                # k.layers.Activation(k.activations.relu),
                 k.layers.LeakyReLU(0.2),
                 k.layers.Reshape(target_shape=(7, 7, 128)),
                 k.layers.Conv2DTranspose(
@@ -203,7 +202,6 @@ class Decoder(k.Sequential):
                     momentum=0.1,
                     epsilon=1e-5,
                 ),
-                # k.layers.Activation(k.activations.relu),
                 k.layers.LeakyReLU(0.2),
                 k.layers.Conv2DTranspose(
                     128,
@@ -220,7 +218,6 @@ class Decoder(k.Sequential):
                     momentum=0.1,
                     epsilon=1e-5,
                 ),
-                # k.layers.Activation(k.activations.relu),
                 k.layers.LeakyReLU(0.2),
                 k.layers.Conv2DTranspose(
                     n_channels,

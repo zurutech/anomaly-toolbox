@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Set, Tuple
+from typing import Dict, Set
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -152,7 +152,7 @@ class EGBAD(Trainer):
                     )
 
             # Epoch end
-            tf.print(epoch, " completed")
+            tf.print(epoch, "Epoch completed")
 
             # Model selection at the end of every epoch on the validation set
             # Calculate AUPRC - Area Under Precision Recall Curve
@@ -223,7 +223,6 @@ class EGBAD(Trainer):
         x,
     ):
         """Single training step."""
-        # z = tf.random.normal((tf.shape(x)[0], 1, 1, self._hps["latent_vector_size"]))
         z = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
             # Reconstruction

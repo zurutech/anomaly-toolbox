@@ -8,7 +8,7 @@ import tensorflow as tf
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
 from anomaly_toolbox.experiments.experiment import Experiment
 from anomaly_toolbox.hps import hparam_parser
-from anomaly_toolbox.trainers import GANomaly
+from anomaly_toolbox.trainers.ganomaly import GANomaly
 
 
 class GANomalyExperiment(Experiment):
@@ -30,6 +30,7 @@ class GANomalyExperiment(Experiment):
         self, hps: Dict, log_dir: Path, dataset: AnomalyDetectionDataset
     ) -> None:
         """Experiment execution - architecture specific.
+
         Args:
             hps: Dictionary with the parameters to use for the current run.
             log_dir: Where to store the tensorboard logs.
@@ -47,16 +48,13 @@ class GANomalyExperiment(Experiment):
         )
         trainer = GANomaly(
             dataset=dataset,
-            input_dimension=(new_size[0], new_size[1], dataset.channels),
             hps=hps,
             summary_writer=summary_writer,
             log_dir=log_dir,
         )
         trainer.train(
-            epoch=hps["epochs"],
+            epochs=hps["epochs"],
             adversarial_loss_weight=hps["adversarial_loss_weight"],
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],
         )
-        trainer.discriminator.save(str(log_dir / "discriminator"))
-        trainer.generator.save(str(log_dir / "generator"))
