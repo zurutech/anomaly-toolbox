@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Set
+import os
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -161,29 +162,11 @@ class EGBAD(Trainer):
             # thresholds values on the anomaly score.
             self._auprc.reset_state()
             for batch in self._dataset.validation:
+
                 x, labels_test = batch
 
-                e_x = self.encoder(x, training=False)
-                g_ex = self.generator(e_x, training=False)
-
-                d_x, x_features = self.discriminator([x, e_x], training=False)
-                d_gex, ex_features = self.discriminator([g_ex, e_x], training=False)
-
-                g_score = tf.norm(
-                    k.layers.Flatten()(residual_loss(x, g_ex)), axis=1, keepdims=False
-                )
-
-                ex_features = tf.squeeze(ex_features)
-                x_features = tf.squeeze(x_features)
-
-                d_score = tf.norm(
-                    k.layers.Flatten()(x_features - ex_features), axis=1, keepdims=False
-                )
-
-                # Anomaly score should have a shape of (batch_size,)
-                anomaly_scores = tf.linalg.normalize(
-                    self._alpha * d_score + (1.0 - self._alpha) * g_score
-                )
+                # Get the anomaly scores
+                anomaly_scores = self._compute_anomaly_scores(x)
 
                 # Update streaming auprc
                 self._auprc.update_state(labels_test, anomaly_scores[0])
@@ -263,3 +246,74 @@ class EGBAD(Trainer):
             g_loss,
             e_loss,
         )
+
+    def test(self):
+
+        # Resetting the state of the AUPRC variable
+        self._auprc.reset_states()
+
+        # Test on the test dataset
+        for batch in self._dataset.test:
+
+            x, labels_test = batch
+
+            anomaly_scores = self._compute_anomaly_scores(x)
+
+            # Update streaming auprc
+            self._auprc.update_state(labels_test, anomaly_scores[0])
+
+        # Get the current AUPRC value
+        auprc = self._auprc.result()
+
+        tf.print("Best AUPRC on test set: ", auprc)
+
+        base_path = self._log_dir / "results" / "best"
+        result_json_path = os.path.join(base_path, "auprc.json")
+
+        # Update the file with the test results
+        with open(result_json_path, "r") as file:
+            data = json.load(file)
+
+        # Append the result
+        data["best_on_test_dataset"] = float(auprc)
+
+        # Write the file
+        with open(result_json_path, "w") as fp:
+            json.dump(data, fp)
+
+    def _compute_anomaly_scores(self, x) -> tf.Tensor:
+        """
+        Compute the anomaly scores as indicated in the EGBAD paper
+        https://arxiv.org/abs/1802.06222.
+
+        Args:
+            x: The batch of data to use to calculate the anomaly scores.
+
+        Returns:
+            The anomaly scores on the input batch, [0, 1] normalized.
+
+        """
+        e_x = self.encoder.call(x, training=False)
+        g_ex = self.generator.call(e_x, training=False)
+
+        d_x, x_features = self.discriminator([x, e_x], training=False)
+        d_gex, ex_features = self.discriminator([g_ex, e_x], training=False)
+
+        g_score = tf.norm(
+            k.layers.Flatten()(residual_loss(x, g_ex)), axis=1, keepdims=False
+        )
+
+        # Remove unused (i.e., 1-shaped) axis by squeezing
+        ex_features = tf.squeeze(ex_features)
+        x_features = tf.squeeze(x_features)
+
+        d_score = tf.norm(
+            k.layers.Flatten()(x_features - ex_features), axis=1, keepdims=False
+        )
+
+        # Anomaly score should have a shape of (batch_size,)
+        anomaly_scores = tf.linalg.normalize(
+            self._alpha * d_score + (1.0 - self._alpha) * g_score
+        )
+
+        return anomaly_scores
