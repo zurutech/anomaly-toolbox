@@ -292,6 +292,7 @@ class GANomaly(Trainer):
 
             x, labels_test = batch
 
+            # Get the anomaly scores
             anomaly_scores = self._compute_anomaly_scores(x)
 
             # Update streaming auprc
@@ -310,7 +311,7 @@ class GANomaly(Trainer):
             data = json.load(file)
 
         # Append the result
-        data["best_on_test_dataset"] = str(auprc.numpy())
+        data["best_on_test_dataset"] = float(auprc)
 
         # Write the file
         with open(result_json_path, "w") as fp:
@@ -319,7 +320,7 @@ class GANomaly(Trainer):
     def _compute_anomaly_scores(self, x) -> tf.Tensor:
         """
         Compute the anomaly scores as indicated in the GANomaly paper
-        https://arxiv.org/pdf/1805.06725.pdf.
+        https://arxiv.org/abs/1805.06725.
 
         Args:
             x: The batch of data to use to calculate the anomaly scores.
@@ -336,7 +337,7 @@ class GANomaly(Trainer):
         # Encode the generated g_ex
         e_gex = self.encoder(g_ex, training=False)
 
-        # Get the anomaly score
+        # Get the anomaly scores
         anomaly_scores = tf.linalg.normalize(
             tf.norm(
                 tf.keras.layers.Flatten()(tf.abs(e_x - e_gex)),
