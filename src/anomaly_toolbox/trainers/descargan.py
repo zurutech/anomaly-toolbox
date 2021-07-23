@@ -88,7 +88,8 @@ class DeScarGAN(Trainer):
 
     @staticmethod
     def clip_by_norm_handle_none(grad, clip_norm):
-        """tape.compute_gradients returns None instead of a zero tensor when the
+        """
+        tape.compute_gradients returns None instead of a zero tensor when the
         gradient would be a zero tensor and tf.clip_by_* does not support
         a None value.
         So just don't pass None to it and preserve None values.
@@ -121,7 +122,9 @@ class DeScarGAN(Trainer):
         epochs: int,
         step_log_frequency: int = 100,
     ):
-        """Train the DeScarGAN generator and discriminator."""
+        """
+        Train the DeScarGAN generator and discriminator.
+        """
 
         step_log_frequency = tf.convert_to_tensor(step_log_frequency, dtype=tf.int64)
         epochs = tf.convert_to_tensor(epochs, dtype=tf.int32)
@@ -219,14 +222,14 @@ class DeScarGAN(Trainer):
                 threshold,
             )
 
-            # reconstruction <= threshold => normal data (label 0)
+            # reconstruction <= threshold, then is a normal data (label 0)
             for x, y in self._dataset.test_normal.concatenate(
                 self._dataset.test_anomalous
             ):
                 self.accuracy.update_state(
                     y_true=y,
                     y_pred=tf.cast(
-                        # reconstruction > threshold => anomalous (label 1 = cast(True))
+                        # reconstruction > threshold, then is anomalous (label 1 = cast(True))
                         # invoke the generator always with the normal label, since that's
                         # what we suppose to receive in input (and the threshold has been found
                         # using data that comes only from the normal distribution)
@@ -268,11 +271,14 @@ class DeScarGAN(Trainer):
     def gradient_penalty(
         self, x: tf.Tensor, x_gen: tf.Tensor, labels: tf.Tensor
     ) -> tf.Tensor:
-        """Compute gradient penalty: L2(grad - 1)^2.
+        """
+        Compute gradient penalty: L2(grad - 1)^2.
+
         Args:
             x: input batch
             x_gen: generated images
             labels: labels associated with x (and thus with x_gen)
+
         Returns:
             penalty on discriminator gradient
         """
@@ -293,12 +299,15 @@ class DeScarGAN(Trainer):
         self,
         inputs: Tuple[tf.Tensor, tf.Tensor],
     ):
-        """Single training step.
+        """
+        Single training step.
+
         Args:
             inputs: a tuple  (x,y) containing the input samples (x) and their labels (y).
-                    bothg x, and y, are batches.
+                    both x, and y, are batches.
                     If x is a batch of images the input shape is (batch_size, h, w, d).
                     The shape of y is always (batch_size,).
+
         Returns:
             d_loss, g_loss, x_hat, where
 
@@ -552,3 +561,55 @@ class DeScarGAN(Trainer):
         del tape
 
         return d_loss, g_loss, x_hat
+
+    def test(self):
+        self.accuracy.reset_state()
+
+        # Get the threshold
+        accuracy_path = self._log_dir / "results" / "best" / "accuracy.json"
+        with open(accuracy_path, "r") as fp:
+            data = json.load(fp)
+            threshold = data["threshold"]
+
+        # reconstruction <= threshold => normal data (label 0)
+
+        # TODO: here, the self._dataset.test_normal is concatenated with test_anomalous. Is there
+        # a reason why it is not directly used the self._dataset.test?
+        for x, y in self._dataset.test_normal.concatenate(self._dataset.test_anomalous):
+            self.accuracy.update_state(
+                y_true=y,
+                y_pred=tf.cast(
+                    # reconstruction > threshold => anomalous (label 1 = cast(True))
+                    # invoke the generator always with the normal label, since that's
+                    # what we suppose to receive in input (and the threshold has been found
+                    # using data that comes only from the normal distribution)
+                    tf.math.greater(
+                        tf.reduce_mean(
+                            tf.math.abs(
+                                self.generator(
+                                    (
+                                        x,
+                                        tf.ones(tf.shape(x)[0], dtype=tf.int32)
+                                        * self._dataset.normal_label,
+                                    ),
+                                    training=False,
+                                )
+                                - x
+                            ),
+                            axis=[1, 2, 3],
+                        ),
+                        threshold,
+                    ),
+                    tf.int32,
+                ),
+            )
+
+        current_accuracy = self.accuracy.result()
+        tf.print("Binary accuracy on test set: ", current_accuracy)
+
+        # Append the result
+        data["best_on_test_dataset"] = float(float(current_accuracy))
+
+        # Write the file
+        with open(accuracy_path, "w") as fp:
+            json.dump(data, fp)
