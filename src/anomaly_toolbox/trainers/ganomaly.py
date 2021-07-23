@@ -170,21 +170,7 @@ class GANomaly(Trainer):
             for batch in self._dataset.validation:
                 x, labels_test = batch
 
-                # Get the generator reconstruction of a decoded input data
-                e_x = self.encoder(x, training=False)
-                g_ex = self.generator(e_x, training=False)
-
-                # Encode the generated g_ex
-                e_gex = self.encoder(g_ex, training=False)
-
-                # Get the anomaly score
-                anomaly_scores = tf.linalg.normalize(
-                    tf.norm(
-                        tf.keras.layers.Flatten()(tf.abs(e_x - e_gex)),
-                        axis=1,
-                        keepdims=False,
-                    )
-                )
+                anomaly_scores = self._compute_anomaly_scores(x)
 
                 # Update streaming auprc
                 self._auprc.update_state(labels_test, anomaly_scores[0])
@@ -294,3 +280,49 @@ class GANomaly(Trainer):
             g_loss,
             e_loss,
         )
+
+    def test(self):
+
+        # Resetting the state of the AUPRC variable
+        self._auprc.reset_states()
+
+        # Test on the test dataset
+        for batch in self._dataset.test:
+
+            x, labels_test = batch
+
+            anomaly_scores = self._compute_anomaly_scores(x)
+
+            # Update streaming auprc
+            self._auprc.update_state(labels_test, anomaly_scores[0])
+
+    def _compute_anomaly_scores(self, x) -> tf.Tensor:
+        """
+        Compute the anomaly scores as indicated in the GANomaly paper
+        https://arxiv.org/pdf/1805.06725.pdf.
+
+        Args:
+            x: The batch of data to use to calculate the anomaly scores.
+
+        Returns:
+            The anomaly scores on the input batch, [0, 1] normalized.
+
+        """
+
+        # Get the generator reconstruction of a decoded input data
+        e_x = self.encoder(x, training=False)
+        g_ex = self.generator(e_x, training=False)
+
+        # Encode the generated g_ex
+        e_gex = self.encoder(g_ex, training=False)
+
+        # Get the anomaly score
+        anomaly_scores = tf.linalg.normalize(
+            tf.norm(
+                tf.keras.layers.Flatten()(tf.abs(e_x - e_gex)),
+                axis=1,
+                keepdims=False,
+            )
+        )
+
+        return anomaly_scores
