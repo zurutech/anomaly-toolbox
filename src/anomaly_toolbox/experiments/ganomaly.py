@@ -40,22 +40,30 @@ class GANomalyExperiment(Experiment):
         summary_writer = tf.summary.create_file_writer(str(log_dir))
         new_size = (32, 32)
 
+        # Create the dataset with the requested sizes (requested by the model architecture)
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
             new_size=new_size,
             shuffle_buffer_size=hps["shuffle_buffer_size"],
         )
+
+        # Create the GANomaly trainer
         trainer = GANomaly(
             dataset=dataset,
             hps=hps,
             summary_writer=summary_writer,
             log_dir=log_dir,
         )
+
+        # Train the GANomaly model
         trainer.train(
             epochs=hps["epochs"],
             adversarial_loss_weight=hps["adversarial_loss_weight"],
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],
         )
+
+        # Test on test dataset and put the results in the json file (the same file  used inside the
+        # training for the model selection)
         trainer.test()
