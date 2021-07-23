@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Set, Tuple
+import os
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -157,13 +158,14 @@ class AnoGAN(Trainer):
         epochs: tf.Tensor,
         step_log_frequency: tf.Tensor,
     ) -> None:
-        """Train the model for the desider number of epochs.
+        """
+        Train the model for the desired number of epochs.
         Calls the `train_step` function in loop.
         Also performs model selection on AUC using a subset of the test set.
 
         Args:
             epochs: The number of training epochs.
-            step_log_frequency: Number of steps to use for loging on CLI and
+            step_log_frequency: Number of steps to use for logging on CLI and
                                 tensorboard.
         """
         best_auc = -1.0
@@ -215,7 +217,7 @@ class AnoGAN(Trainer):
 
             # Model selection using a subset of the validation set (for speed reasons)
             # Keep "batches" number of batch of positives, them same for the negatives
-            # then unbatch them, and process every element indipendently.
+            # then un-batch them, and process every element independently.
             batches = 1
             validation_subset = self._dataset.validation_normal.take(
                 batches
@@ -256,9 +258,12 @@ class AnoGAN(Trainer):
         self,
         x: tf.Tensor,
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-        """Single training step.
+        """
+        Single training step.
+
         Args:
             x: A batch of images.
+
         Returns:
             x_hat: A batch of generated images.
             d_loss: The discriminator loss.
@@ -291,8 +296,8 @@ class AnoGAN(Trainer):
     def latent_search(
         self, x: tf.Tensor, gamma: tf.Tensor = tf.constant(500)
     ) -> tf.Tensor:
-        """The test step searches in the latent space
-        the z value that's likely to be mapped with the input image x.
+        """
+        Search in the latent space the z value that's likely to be mapped with the input image x.
         This step returns the value of the latent vector.
         NOTE: this is slow, since it performs gamma optimization steps
         to find the value of z.
@@ -300,6 +305,7 @@ class AnoGAN(Trainer):
         Args:
             x: Test image.
             gamma: Number of optimization steps.
+
         Returns:
             anomaly_score at the end of the gamma steps.
         """
@@ -331,3 +337,52 @@ class AnoGAN(Trainer):
         for _ in tf.range(gamma):
             anomaly_score = opt_step()
         return anomaly_score
+
+    def test(self):
+        """
+        Test the model on the test dataset.
+        In particular, because anogan is slow when performing the test operation, just a subset
+        of the test dataset is used.
+
+        Returns:
+            None.
+
+        """
+        # Resetting the state of the AUC variable
+        self._auc.reset_states()
+
+        # Use just one batch because the latent space search is very slow.
+        batches = 1
+        test_subset = self._dataset.test.take(batches).concatenate(
+            self._dataset.test.take(batches)
+        )
+
+        # We need to search for z, hence we do this 1 element at a time (slow!)
+        test_subset = test_subset.unbatch().batch(1)
+
+        for idx, sample in enumerate(test_subset):
+            x, y = sample
+            # self._z_gamma should be the z value that's likely
+            # to produce x (from what the generator knows)
+            anomaly_score = self.latent_search(x)
+            self._auc.update_state(
+                y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
+            )
+
+        auc = self._auc.result()
+
+        tf.print("Best AUC on test set: ", auc)
+
+        base_path = self._log_dir / "results" / "best"
+        result_json_path = os.path.join(base_path, "auc.json")
+
+        # Update the file with the test results
+        with open(result_json_path, "r") as file:
+            data = json.load(file)
+
+        # Append the result
+        data["best_on_test_dataset"] = float(auc)
+
+        # Write the file
+        with open(result_json_path, "w") as fp:
+            json.dump(data, fp)
