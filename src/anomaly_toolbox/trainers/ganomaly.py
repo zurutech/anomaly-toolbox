@@ -3,6 +3,7 @@
 from typing import Dict, Set
 from pathlib import Path
 import json
+import os
 
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -295,6 +296,25 @@ class GANomaly(Trainer):
 
             # Update streaming auprc
             self._auprc.update_state(labels_test, anomaly_scores[0])
+
+        # Get the current AUPRC value
+        auprc = self._auprc.result()
+
+        tf.print("Best AUPRC on test set: ", auprc)
+
+        base_path = self._log_dir / "results" / "best"
+        result_json_path = os.path.join(base_path, "auprc.json")
+
+        # Update the file with the test results
+        with open(result_json_path, "r") as file:
+            data = json.load(file)
+
+        # Append the result
+        data["best_on_test_dataset"] = str(auprc.numpy())
+
+        # Write the file
+        with open(result_json_path, "w") as fp:
+            json.dump(data, fp)
 
     def _compute_anomaly_scores(self, x) -> tf.Tensor:
         """
