@@ -563,10 +563,18 @@ class DeScarGAN(Trainer):
         return d_loss, g_loss, x_hat
 
     def test(self):
+
+        base_path = self._log_dir / "results" / "best"
+        model_path = base_path / "generator"
+
+        # Load the best model to use as the model here
+        generator = tf.keras.models.load_model(model_path)
+        generator.summary()
+
         self.accuracy.reset_state()
 
         # Get the threshold
-        accuracy_path = self._log_dir / "results" / "best" / "accuracy.json"
+        accuracy_path = base_path / "accuracy.json"
         with open(accuracy_path, "r") as fp:
             data = json.load(fp)
             threshold = data["threshold"]
@@ -586,7 +594,7 @@ class DeScarGAN(Trainer):
                     tf.math.greater(
                         tf.reduce_mean(
                             tf.math.abs(
-                                self.generator(
+                                generator(
                                     (
                                         x,
                                         tf.ones(tf.shape(x)[0], dtype=tf.int32)

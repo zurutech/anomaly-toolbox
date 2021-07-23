@@ -171,7 +171,9 @@ class GANomaly(Trainer):
             for batch in self._dataset.validation:
                 x, labels_test = batch
 
-                anomaly_scores = self._compute_anomaly_scores(x)
+                anomaly_scores = self._compute_anomaly_scores(
+                    x, self.encoder, self.generator
+                )
 
                 # Update streaming auprc
                 self._auprc.update_state(labels_test, anomaly_scores[0])
@@ -284,6 +286,16 @@ class GANomaly(Trainer):
 
     def test(self):
 
+        base_path = self._log_dir / "results" / "best"
+        encoder_path = base_path / "encoder"
+        generator_path = base_path / "generator"
+
+        # Load the best models to use as the model here
+        encoder = tf.keras.models.load_model(encoder_path)
+        encoder.summary()
+        generator = tf.keras.models.load_model(generator_path)
+        generator.summary()
+
         # Resetting the state of the AUPRC variable
         self._auprc.reset_states()
 
@@ -293,7 +305,7 @@ class GANomaly(Trainer):
             x, labels_test = batch
 
             # Get the anomaly scores
-            anomaly_scores = self._compute_anomaly_scores(x)
+            anomaly_scores = self._compute_anomaly_scores(x, encoder, generator)
 
             # Update streaming auprc
             self._auprc.update_state(labels_test, anomaly_scores[0])
@@ -317,7 +329,9 @@ class GANomaly(Trainer):
         with open(result_json_path, "w") as fp:
             json.dump(data, fp)
 
-    def _compute_anomaly_scores(self, x) -> tf.Tensor:
+    def _compute_anomaly_scores(
+        self, x: tf.Tensor, encoder: keras.Model, generator: keras.Model
+    ) -> tf.Tensor:
         """
         Compute the anomaly scores as indicated in the GANomaly paper
         https://arxiv.org/abs/1805.06725.
@@ -331,11 +345,11 @@ class GANomaly(Trainer):
         """
 
         # Get the generator reconstruction of a decoded input data
-        e_x = self.encoder(x, training=False)
-        g_ex = self.generator(e_x, training=False)
+        e_x = encoder(x, training=False)
+        g_ex = generator(e_x, training=False)
 
         # Encode the generated g_ex
-        e_gex = self.encoder(g_ex, training=False)
+        e_gex = encoder(g_ex, training=False)
 
         # Get the anomaly scores
         anomaly_scores = tf.linalg.normalize(

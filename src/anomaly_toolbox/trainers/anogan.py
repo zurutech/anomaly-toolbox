@@ -230,7 +230,9 @@ class AnoGAN(Trainer):
                 x, y = sample
                 # self._z_gamma should be the z value that's likely
                 # to produce x (from what the generator knows)
-                anomaly_score = self.latent_search(x)
+                anomaly_score = self.latent_search(
+                    x, self.generator, self.discriminator
+                )
                 self._auc.update_state(
                     y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
                 )
@@ -294,7 +296,11 @@ class AnoGAN(Trainer):
         return x_hat, d_loss, g_loss
 
     def latent_search(
-        self, x: tf.Tensor, gamma: tf.Tensor = tf.constant(500)
+        self,
+        x: tf.Tensor,
+        generator: k.Model,
+        discriminator: k.Model,
+        gamma: tf.Tensor = tf.constant(500),
     ) -> tf.Tensor:
         """
         Search in the latent space the z value that's likely to be mapped with the input image x.
@@ -304,6 +310,8 @@ class AnoGAN(Trainer):
 
         Args:
             x: Test image.
+            generator: The generator model to be used.
+            discriminator: The discriminator model to be used.
             gamma: Number of optimization steps.
 
         Returns:
@@ -317,18 +325,18 @@ class AnoGAN(Trainer):
 
             with tf.GradientTape(watch_accessed_variables=False) as tape:
                 tape.watch(self._z_gamma)
-                x_hat = self.generator(tf.expand_dims(self._z_gamma, axis=0))
+                x_hat = generator(tf.expand_dims(self._z_gamma, axis=0))
                 residual_score = residual_loss(x, x_hat)
 
-                d_x, _ = self.discriminator(x, training=False)
-                d_x_hat, _ = self.discriminator(x_hat, training=False)
+                d_x, _ = discriminator(x, training=False)
+                d_x_hat, _ = discriminator(x_hat, training=False)
                 discrimination_score = self._minmax(d_x, d_x_hat)
 
                 anomaly_score = (
                     1.0 - self._lambda
                 ) * residual_score + self._lambda * discrimination_score
 
-            # we want to minimize the anomamly score
+            # we want to minimize the anomaly score
             grads = tape.gradient(anomaly_score, [self._z_gamma])
             self.optimizer_z.apply_gradients(zip(grads, [self._z_gamma]))
             return anomaly_score
@@ -348,6 +356,17 @@ class AnoGAN(Trainer):
             None.
 
         """
+
+        base_path = self._log_dir / "results" / "best"
+        generator_path = base_path / "generator"
+        discriminator_path = base_path / "discriminator"
+
+        # Load the best models to use as the model here
+        generator = tf.keras.models.load_model(generator_path)
+        generator.summary()
+        discriminator = tf.keras.models.load_model(discriminator_path)
+        discriminator.summary()
+
         # Resetting the state of the AUC variable
         self._auc.reset_states()
 
@@ -364,7 +383,7 @@ class AnoGAN(Trainer):
             x, y = sample
             # self._z_gamma should be the z value that's likely
             # to produce x (from what the generator knows)
-            anomaly_score = self.latent_search(x)
+            anomaly_score = self.latent_search(x, generator, discriminator)
             self._auc.update_state(
                 y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
             )

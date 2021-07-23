@@ -166,7 +166,9 @@ class EGBAD(Trainer):
                 x, labels_test = batch
 
                 # Get the anomaly scores
-                anomaly_scores = self._compute_anomaly_scores(x)
+                anomaly_scores = self._compute_anomaly_scores(
+                    x, self.encoder, self.generator, self.discriminator
+                )
 
                 # Update streaming auprc
                 self._auprc.update_state(labels_test, anomaly_scores[0])
@@ -209,10 +211,10 @@ class EGBAD(Trainer):
         z = tf.random.normal((tf.shape(x)[0], self._hps["latent_vector_size"]))
         with tf.GradientTape(persistent=True) as tape:
             # Reconstruction
-            g_z = self.generator(z, training=True)
+            g_z = self.generator.call(z, training=True)
 
-            e_x = self.encoder(x, training=True)
-            g_ex = self.generator(e_x, training=True)
+            e_x = self.encoder.call(x, training=True)
+            g_ex = self.generator.call(e_x, training=True)
 
             d_g_z, _ = self.discriminator(inputs=[g_z, z], training=True)
             d_x, _ = self.discriminator(inputs=[x, e_x], training=True)
@@ -249,6 +251,19 @@ class EGBAD(Trainer):
 
     def test(self):
 
+        base_path = self._log_dir / "results" / "best"
+        encoder_path = base_path / "encoder"
+        generator_path = base_path / "generator"
+        discriminator_path = base_path / "discriminator"
+
+        # Load the best models to use as the model here
+        encoder = tf.keras.models.load_model(encoder_path)
+        encoder.summary()
+        generator = tf.keras.models.load_model(generator_path)
+        generator.summary()
+        discriminator = tf.keras.models.load_model(discriminator_path)
+        discriminator.summary()
+
         # Resetting the state of the AUPRC variable
         self._auprc.reset_states()
 
@@ -257,7 +272,9 @@ class EGBAD(Trainer):
 
             x, labels_test = batch
 
-            anomaly_scores = self._compute_anomaly_scores(x)
+            anomaly_scores = self._compute_anomaly_scores(
+                x, encoder, generator, discriminator
+            )
 
             # Update streaming auprc
             self._auprc.update_state(labels_test, anomaly_scores[0])
@@ -281,7 +298,9 @@ class EGBAD(Trainer):
         with open(result_json_path, "w") as fp:
             json.dump(data, fp)
 
-    def _compute_anomaly_scores(self, x) -> tf.Tensor:
+    def _compute_anomaly_scores(
+        self, x: tf.Tensor, encoder: k.Model, generator: k.Model, discriminator: k.Model
+    ) -> tf.Tensor:
         """
         Compute the anomaly scores as indicated in the EGBAD paper
         https://arxiv.org/abs/1802.06222.
@@ -293,11 +312,11 @@ class EGBAD(Trainer):
             The anomaly scores on the input batch, [0, 1] normalized.
 
         """
-        e_x = self.encoder.call(x, training=False)
-        g_ex = self.generator.call(e_x, training=False)
+        e_x = encoder.call(x, training=False)
+        g_ex = generator.call(e_x, training=False)
 
-        d_x, x_features = self.discriminator([x, e_x], training=False)
-        d_gex, ex_features = self.discriminator([g_ex, e_x], training=False)
+        d_x, x_features = discriminator([x, e_x], training=False)
+        d_gex, ex_features = discriminator([g_ex, e_x], training=False)
 
         g_score = tf.norm(
             k.layers.Flatten()(residual_loss(x, g_ex)), axis=1, keepdims=False
