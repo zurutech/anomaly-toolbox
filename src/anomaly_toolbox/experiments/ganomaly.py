@@ -58,3 +58,4 @@ class GANomalyExperiment(Experiment):
             contextual_loss_weight=hps["contextual_loss_weight"],
             enc_loss_weight=hps["enc_loss_weight"],
         )
+        trainer.test()
