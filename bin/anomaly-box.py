@@ -143,7 +143,6 @@ def main(
         experiment_instance.run(hps_tuning, grid_search, dataset_instance)
 
     # Check the best result for all experiments
-    experiments = available_experiments.__experiments__
     if run_all:
         result_dirs = ["Experiment", "AUC", "AUPRC", "Precision", "Recall"]
 
