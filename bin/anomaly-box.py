@@ -118,37 +118,34 @@ def main(
         )
         return 1
 
-    # if chosen_experiment:
-    #     experiments = [chosen_experiment]
-    # else:
-    #     experiments = available_experiments.__experiments__
-    #
-    # for experiment in experiments:
-    #     log_dir = Path("logs") / experiment
-    #     log_dir.mkdir(parents=True, exist_ok=True)
-    #
-    #     try:
-    #         experiment_instance = getattr(
-    #             importlib.import_module("anomaly_toolbox.experiments"),
-    #             experiment,
-    #         )(hps_path, log_dir)
-    #     except (ModuleNotFoundError, AttributeError, TypeError):
-    #         logging.error(
-    #             "Experiment %s is not among the available: %s",
-    #             experiment,
-    #             ",".join(available_experiments.__experiments__),
-    #         )
-    #         return 1
-    #
-    #     experiment_instance.run(hps_tuning, grid_search, dataset_instance)
+    if chosen_experiment:
+        experiments = [chosen_experiment]
+    else:
+        experiments = available_experiments.__experiments__
+
+    for experiment in experiments:
+        log_dir = Path("logs") / experiment
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            experiment_instance = getattr(
+                importlib.import_module("anomaly_toolbox.experiments"),
+                experiment,
+            )(hps_path, log_dir)
+        except (ModuleNotFoundError, AttributeError, TypeError):
+            logging.error(
+                "Experiment %s is not among the available: %s",
+                experiment,
+                ",".join(available_experiments.__experiments__),
+            )
+            return 1
+
+        experiment_instance.run(hps_tuning, grid_search, dataset_instance)
 
     # Check the best result for all experiments
     experiments = available_experiments.__experiments__
     if run_all:
         result_dirs = ["Experiment", "AUC", "AUPRC", "Precision", "Recall"]
-        best_experiment = {}
-        all_experiments = {}
-        best_result = 0.0
 
         # For every experiment
         table = [result_dirs]  # This create the table header
@@ -178,7 +175,7 @@ def main(
                 # Put the results in the table
                 table = table + table_row
 
-        #TODO: to be deleted, just for output log
+        # TODO: to be deleted, just for output log
         print(tabulate(table, headers="firstrow", tablefmt="github"))
 
         with open("result_table.md", "w") as outputfile:
