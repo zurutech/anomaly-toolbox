@@ -36,6 +36,7 @@ class GANomalyExperiment(Experiment):
             log_dir: Where to store the tensorboard logs.
             dataset: The dataset to use for model training and evaluation.
         """
+        print("Running GANomaly experiment...")
 
         summary_writer = tf.summary.create_file_writer(str(log_dir))
         new_size = (32, 32)

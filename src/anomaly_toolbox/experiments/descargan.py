@@ -36,6 +36,8 @@ class DeScarGANExperiment(Experiment):
             dataset: The dataset to use for model training and evaluation.
         """
 
+        print("Running DeScarGAN experiment...")
+
         # Create and configure the dataset
         dataset.configure(
             anomalous_label=hps["anomalous_label"],

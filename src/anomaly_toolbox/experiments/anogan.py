@@ -42,6 +42,8 @@ class AnoGANExperiment(Experiment):
             log_dir: where to store the tensorboard logs.
             dataset: the dataset to use for model training and evaluation.
         """
+        print("Running AnoGAN experiment...")
+
         summary_writer = tf.summary.create_file_writer(str(log_dir))
 
         # Create and configure the dataset
