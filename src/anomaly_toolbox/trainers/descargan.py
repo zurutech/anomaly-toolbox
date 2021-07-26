@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Set, Tuple
+import os
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -565,6 +566,7 @@ class DeScarGAN(Trainer):
     def test(self):
 
         base_path = self._log_dir / "results" / "best"
+        best_path = self._log_dir / "results" / "best" / "accuracy" / "result.json"
         model_path = base_path / "generator"
 
         # Load the best model to use as the model here
@@ -615,9 +617,13 @@ class DeScarGAN(Trainer):
         current_accuracy = self.accuracy.result()
         tf.print("Binary accuracy on test set: ", current_accuracy)
 
-        # Append the result
-        data["best_on_test_dataset"] = float(float(current_accuracy))
+        # Create the result
+        result = {"best_on_test_dataset": float(float(current_accuracy))}
+        best_path = self._log_dir / "results" / "best" / "accuracy" / "result.json"
+
+        if not os.path.exists(best_path):
+            best_path.mkdir()
 
         # Write the file
-        with open(accuracy_path, "w") as fp:
-            json.dump(data, fp)
+        with open(best_path, "w") as fp:
+            json.dump(result, fp)

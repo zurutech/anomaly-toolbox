@@ -76,6 +76,7 @@ class EGBAD(Trainer):
         self.epoch_g_loss_avg = k.metrics.Mean(name="epoch_generator_loss")
         self.epoch_e_loss_avg = k.metrics.Mean(name="epoch_encoder_loss")
         self._auprc = k.metrics.AUC(name="auprc", curve="PR", num_thresholds=500)
+
         self.keras_metrics = {
             metric.name: metric
             for metric in [
@@ -161,6 +162,7 @@ class EGBAD(Trainer):
             # 2. Use the AUC object to compute the AUPRC with different
             # thresholds values on the anomaly score.
             self._auprc.reset_state()
+
             for batch in self._dataset.validation:
 
                 x, labels_test = batch
@@ -284,19 +286,17 @@ class EGBAD(Trainer):
 
         tf.print("Best AUPRC on test set: ", auprc)
 
-        base_path = self._log_dir / "results" / "best"
-        result_json_path = os.path.join(base_path, "auprc.json")
+        best_path = self._log_dir / "results" / "best" / "AUPRC"
+        if not os.path.exists(best_path):
+            best_path.mkdir()
+        result_json_path = os.path.join(best_path, "result.json")
 
-        # Update the file with the test results
-        with open(result_json_path, "r") as file:
-            data = json.load(file)
-
-        # Append the result
-        data["best_on_test_dataset"] = float(auprc)
+        # Create the result
+        result = {"best_on_test_dataset": float(auprc)}
 
         # Write the file
         with open(result_json_path, "w") as fp:
-            json.dump(data, fp)
+            json.dump(result, fp)
 
     def _compute_anomaly_scores(
         self, x: tf.Tensor, encoder: k.Model, generator: k.Model, discriminator: k.Model

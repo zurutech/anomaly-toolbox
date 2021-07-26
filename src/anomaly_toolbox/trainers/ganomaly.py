@@ -315,19 +315,17 @@ class GANomaly(Trainer):
 
         tf.print("Best AUPRC on test set: ", auprc)
 
-        base_path = self._log_dir / "results" / "best"
-        result_json_path = os.path.join(base_path, "auprc.json")
+        best_path = self._log_dir / "results" / "best" / "AUPRC"
+        if not os.path.exists(best_path):
+            best_path.mkdir()
+        result_json_path = os.path.join(best_path, "result.json")
 
-        # Update the file with the test results
-        with open(result_json_path, "r") as file:
-            data = json.load(file)
-
-        # Append the result
-        data["best_on_test_dataset"] = float(auprc)
+        # Create the result
+        result = {"best_on_test_dataset": float(auprc)}
 
         # Write the file
         with open(result_json_path, "w") as fp:
-            json.dump(data, fp)
+            json.dump(result, fp)
 
     def _compute_anomaly_scores(
         self, x: tf.Tensor, encoder: keras.Model, generator: keras.Model

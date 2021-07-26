@@ -392,16 +392,14 @@ class AnoGAN(Trainer):
 
         tf.print("Best AUC on test set: ", auc)
 
-        base_path = self._log_dir / "results" / "best"
-        result_json_path = os.path.join(base_path, "auc.json")
+        best_path = base_path / "AUC"
+        if not os.path.exists(best_path):
+            best_path.mkdir()
+        result_json_path = os.path.join(best_path, "result.json")
 
-        # Update the file with the test results
-        with open(result_json_path, "r") as file:
-            data = json.load(file)
-
-        # Append the result
-        data["best_on_test_dataset"] = float(auc)
+        # Create the result
+        result = {"best_on_test_dataset": float(auc)}
 
         # Write the file
         with open(result_json_path, "w") as fp:
-            json.dump(data, fp)
+            json.dump(result, fp)
