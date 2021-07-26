@@ -5,9 +5,11 @@ import logging
 import sys
 from pathlib import Path
 import glob
-import json
+import os
 
+import json
 import click
+from tabulate import tabulate
 
 import anomaly_toolbox.datasets as available_datasets
 import anomaly_toolbox.experiments as available_experiments
@@ -116,66 +118,71 @@ def main(
         )
         return 1
 
-    if chosen_experiment:
-        experiments = [chosen_experiment]
-    else:
-        experiments = available_experiments.__experiments__
-
-    for experiment in experiments:
-        log_dir = Path("logs") / experiment
-        log_dir.mkdir(parents=True, exist_ok=True)
-
-        try:
-            experiment_instance = getattr(
-                importlib.import_module("anomaly_toolbox.experiments"),
-                experiment,
-            )(hps_path, log_dir)
-        except (ModuleNotFoundError, AttributeError, TypeError):
-            logging.error(
-                "Experiment %s is not among the available: %s",
-                experiment,
-                ",".join(available_experiments.__experiments__),
-            )
-            return 1
-
-        experiment_instance.run(hps_tuning, grid_search, dataset_instance)
+    # if chosen_experiment:
+    #     experiments = [chosen_experiment]
+    # else:
+    #     experiments = available_experiments.__experiments__
+    #
+    # for experiment in experiments:
+    #     log_dir = Path("logs") / experiment
+    #     log_dir.mkdir(parents=True, exist_ok=True)
+    #
+    #     try:
+    #         experiment_instance = getattr(
+    #             importlib.import_module("anomaly_toolbox.experiments"),
+    #             experiment,
+    #         )(hps_path, log_dir)
+    #     except (ModuleNotFoundError, AttributeError, TypeError):
+    #         logging.error(
+    #             "Experiment %s is not among the available: %s",
+    #             experiment,
+    #             ",".join(available_experiments.__experiments__),
+    #         )
+    #         return 1
+    #
+    #     experiment_instance.run(hps_tuning, grid_search, dataset_instance)
 
     # Check the best result for all experiments
+    experiments = available_experiments.__experiments__
     if run_all:
+        result_dirs = ["Experiment", "AUC", "AUPRC", "Precision", "Recall"]
         best_experiment = {}
         all_experiments = {}
         best_result = 0.0
+
+        # For every experiment
+        table = [result_dirs]  # This create the table header
         for experiment in experiments:
+            table_row = [[experiment, 0.0, 0.0, 0.0, 0.0]]
             log_dir = Path("logs") / experiment / "results" / "best"
-            json_file = glob.glob(log_dir / "./*.json")
+            if os.path.exists(log_dir):
+                dirs = os.listdir(log_dir)
 
-            # Get the value from the json file
-            with open(json_file, "r") as file:
-                data = json.load(file)
+                # For every possible metric collected
+                for dir in dirs:
+                    # Check if the dir considered is actually a metric dir
+                    if dir in result_dirs:
+                        # Get the index inside the list
+                        idx = result_dirs.index(dir)
+                        json_file = glob.glob(str(log_dir / dir / "result.json"))
 
-            current_result = data["best_on_test_dataset"]
+                        # Get the value from the json file
+                        with open(json_file[0], "r") as file:
+                            data = json.load(file)
 
-            # Collect the result of the experiment just to show all of them later
-            all_experiments[experiment] = current_result
+                        current_result = data["best_on_test_dataset"]
 
-            # Keep the best in a dedicated dict
-            if current_result > best_result:
-                best_result = current_result
-                best_experiment = {experiment: current_result}
+                        # Put the result in the correct position of the list
+                        table_row[0][idx] = current_result
 
-            # Note: this is just for the case if we obtain "1" AUPRC (or AUC) with the experiments.
-            elif current_result == best_result:
-                best_experiment[experiment] = current_result
+                # Put the results in the table
+                table = table + table_row
 
-        print("=============================")
-        print("All results")
-        for key in all_experiments:
-            print(f"{key}: {all_experiments[key]}")
-            print("=============================")
+        #TODO: to be deleted, just for output log
+        print(tabulate(table, headers="firstrow", tablefmt="github"))
 
-        print("Best result(s)")
-        for key in best_experiment:
-            print(f"Experiment: {key} has the best result: " f"{best_experiment[key]}")
+        with open("result_table.md", "w") as outputfile:
+            outputfile.write(tabulate(table, headers="firstrow", tablefmt="github"))
 
     return 0
 
