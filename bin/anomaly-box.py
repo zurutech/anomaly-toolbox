@@ -4,6 +4,8 @@ import importlib
 import logging
 import sys
 from pathlib import Path
+import glob
+import json
 
 import click
 
@@ -60,7 +62,7 @@ def main(
     run_all: bool,
 ) -> int:
 
-    # Warning to the user if the hparmas_tuning.json && --tuning==False
+    # Warning to the user if the hparams_tuning.json && --tuning==False
     if "tuning" in str(hps_path) and not hps_tuning:
         logging.warning(
             "You choose to use the tuning JSON but the tuning boolean ("
@@ -137,6 +139,43 @@ def main(
             return 1
 
         experiment_instance.run(hps_tuning, grid_search, dataset_instance)
+
+    # Check the best result for all experiments
+    if run_all:
+        best_experiment = {}
+        all_experiments = {}
+        best_result = 0.0
+        for experiment in experiments:
+            log_dir = Path("logs") / experiment / "results" / "best"
+            json_file = glob.glob(log_dir / "./*.json")
+
+            # Get the value from the json file
+            with open(json_file, "r") as file:
+                data = json.load(file)
+
+            current_result = data["best_on_test_dataset"]
+
+            # Collect the result of the experiment just to show all of them later
+            all_experiments[experiment] = current_result
+
+            # Keep the best in a dedicated dict
+            if current_result > best_result:
+                best_result = current_result
+                best_experiment = {experiment: current_result}
+
+            # Note: this is just for the case if we obtain "1" AUPCR (or AUC) with the experiments.
+            elif current_result == best_result:
+                best_experiment[experiment] = current_result
+
+        print("=============================")
+        print("All results")
+        for key in all_experiments:
+            print(f"{key}: {all_experiments[key]}")
+            print("=============================")
+
+        print("Best result(s)")
+        for key in best_experiment:
+            print(f"Experiment: {key} has the best result: " f"{best_experiment[key]}")
 
     return 0
 
