@@ -163,7 +163,7 @@ def main(
                 best_result = current_result
                 best_experiment = {experiment: current_result}
 
-            # Note: this is just for the case if we obtain "1" AUPCR (or AUC) with the experiments.
+            # Note: this is just for the case if we obtain "1" AUPRC (or AUC) with the experiments.
             elif current_result == best_result:
                 best_experiment[experiment] = current_result
 
