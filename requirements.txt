@@ -131,6 +131,8 @@ six==1.15.0
     #   python-dateutil
     #   tensorflow
     #   tensorflow-datasets
+tabulate==0.8.9
+    # via -r requirements.in
 tensorboard-data-server==0.6.1
     # via tensorboard
 tensorboard-plugin-wit==1.8.0
