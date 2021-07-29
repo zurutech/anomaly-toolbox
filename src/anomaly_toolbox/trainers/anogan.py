@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 from typing import Dict, Set, Tuple
-import os
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -99,11 +98,11 @@ class AnoGAN(Trainer):
         self.epoch_d_loss_avg = k.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = k.metrics.Mean(name="epoch_generator_loss")
 
-        self._auc = k.metrics.AUC(num_thresholds=500)
+        self._auc_roc = k.metrics.AUC(num_thresholds=500)
 
         self.keras_metrics = {
             metric.name: metric
-            for metric in [self.epoch_d_loss_avg, self.epoch_g_loss_avg, self._auc]
+            for metric in [self.epoch_d_loss_avg, self.epoch_g_loss_avg, self._auc_roc]
         }
 
         # Variables and constants
@@ -130,8 +129,8 @@ class AnoGAN(Trainer):
         """Saves the models (generator and discriminator) and the
         AUC thresholds and value.
         """
-        current_auc = self._auc.result()
-        base_path = self._log_dir / "results" / "best"
+        current_auc = self._auc_roc.result()
+        base_path = self._log_dir / "results" / "auc"
         self.discriminator.save(
             str(base_path / "discriminator"),
             overwrite=True,
@@ -143,11 +142,11 @@ class AnoGAN(Trainer):
             include_optimizer=False,
         )
 
-        with open(base_path / "auc.json", "w") as fp:
+        with open(base_path / "validation.json", "w") as fp:
             json.dump(
                 {
                     "value": float(current_auc),
-                    "thresholds": self._auc.thresholds,
+                    "thresholds": self._auc_roc.thresholds,
                 },
                 fp,
             )
@@ -233,7 +232,7 @@ class AnoGAN(Trainer):
                 anomaly_score = self.latent_search(
                     x, self.generator, self.discriminator
                 )
-                self._auc.update_state(
+                self._auc_roc.update_state(
                     y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
                 )
                 with self._summary_writer.as_default():
@@ -246,7 +245,7 @@ class AnoGAN(Trainer):
                         ),
                         step=step + idx,
                     )
-            current_auc = self._auc.result()
+            current_auc = self._auc_roc.result()
             with self._summary_writer.as_default():
                 tf.summary.scalar("auc", current_auc, step=step)
                 tf.print("Validation AUC: ", current_auc)
@@ -349,15 +348,14 @@ class AnoGAN(Trainer):
     def test(self):
         """
         Test the model on the test dataset.
-        In particular, because anogan is slow when performing the test operation, just a subset
-        of the test dataset is used.
+        VERY slow because we search for the optimal z optimizing for every new image of
+        the test set.
 
         Returns:
             None.
-
         """
 
-        base_path = self._log_dir / "results" / "best"
+        base_path = self._log_dir / "results" / "auc"
         generator_path = base_path / "generator"
         discriminator_path = base_path / "discriminator"
 
@@ -368,38 +366,33 @@ class AnoGAN(Trainer):
         discriminator.summary()
 
         # Resetting the state of the AUC variable
-        self._auc.reset_states()
-
-        # Use just one batch because the latent space search is very slow.
-        batches = 1
-        test_subset = self._dataset.test.take(batches).concatenate(
-            self._dataset.test.take(batches)
-        )
+        self._auc_roc.reset_states()
 
         # We need to search for z, hence we do this 1 element at a time (slow!)
-        test_subset = test_subset.unbatch().batch(1)
+        test_subset = self._dataset.test.unbatch().batch(1)
 
-        for idx, sample in enumerate(test_subset):
+        for sample in test_subset:
             x, y = sample
             # self._z_gamma should be the z value that's likely
             # to produce x (from what the generator knows)
             anomaly_score = self.latent_search(x, generator, discriminator)
-            self._auc.update_state(
+            self._auc_roc.update_state(
                 y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
             )
 
-        auc = self._auc.result()
+        current_auc = self._auc_roc.result()
 
-        tf.print("Best AUC on test set: ", auc)
-
-        best_path = base_path / "AUC"
-        if not os.path.exists(best_path):
-            best_path.mkdir()
-        result_json_path = os.path.join(best_path, "result.json")
-
-        # Create the result
-        result = {"best_on_test_dataset": float(auc)}
+        tf.print("Best AUC on test set: ", current_auc)
+        result_json_path = base_path / "test.json"
 
         # Write the file
         with open(result_json_path, "w") as fp:
-            json.dump(result, fp)
+            json.dump(
+                {
+                    "auc_roc": {
+                        "value": float(current_auc),
+                        "thresholds": self._auc_roc.thresholds,
+                    }
+                },
+                fp,
+            )

@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 from typing import Dict, Set, Tuple
-import os
 
 import tensorflow as tf
 import tensorflow.keras as k
@@ -102,13 +101,13 @@ class DeScarGAN(Trainer):
 
     def _select_and_save(self, threshold: tf.Tensor):
         current_accuracy = self.accuracy.result()
-        base_path = self._log_dir / "results" / "best"
+        base_path = self._log_dir / "results" / "accuracy"
         self.generator.save(
             str(base_path / "generator"),
             overwrite=True,
             include_optimizer=False,
         )
-        with open(base_path / "accuracy.json", "w") as fp:
+        with open(base_path / "validation.json", "w") as fp:
             json.dump(
                 {
                     "value": float(current_accuracy),
@@ -564,27 +563,25 @@ class DeScarGAN(Trainer):
         return d_loss, g_loss, x_hat
 
     def test(self):
+        """Measure the performance (only measured metric is accuracy) on the
+        test set."""
 
-        base_path = self._log_dir / "results" / "best"
-        best_path = self._log_dir / "results" / "best" / "accuracy" / "result.json"
-        model_path = base_path / "generator"
+        base_path = self._log_dir / "results" / "accuracy"
 
         # Load the best model to use as the model here
+        model_path = base_path / "generator"
         generator = tf.keras.models.load_model(model_path)
         generator.summary()
 
         self.accuracy.reset_state()
 
         # Get the threshold
-        accuracy_path = base_path / "accuracy.json"
+        accuracy_path = base_path / "validation.json"
         with open(accuracy_path, "r") as fp:
             data = json.load(fp)
             threshold = data["threshold"]
 
         # reconstruction <= threshold => normal data (label 0)
-
-        # TODO: here, the self._dataset.test_normal is concatenated with test_anomalous. Is there
-        # a reason why it is not directly used the self._dataset.test?
         for x, y in self._dataset.test_normal.concatenate(self._dataset.test_anomalous):
             self.accuracy.update_state(
                 y_true=y,
@@ -618,12 +615,17 @@ class DeScarGAN(Trainer):
         tf.print("Binary accuracy on test set: ", current_accuracy)
 
         # Create the result
-        result = {"best_on_test_dataset": float(float(current_accuracy))}
-        best_path = self._log_dir / "results" / "best" / "accuracy" / "result.json"
-
-        if not os.path.exists(best_path):
-            best_path.mkdir()
+        result_path = self._log_dir / "results" / "accuracy" / "test.json"
+        result_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Write the file
-        with open(best_path, "w") as fp:
-            json.dump(result, fp)
+        with open(result_path, "w") as fp:
+            json.dump(
+                {
+                    "accuracy": {
+                        "value": float(current_accuracy),
+                        "threshold": float(threshold),
+                    }
+                },
+                fp,
+            )

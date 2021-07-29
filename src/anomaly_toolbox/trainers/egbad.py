@@ -3,18 +3,13 @@
 import json
 from pathlib import Path
 from typing import Dict, Set
-import os
 
 import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses.egbad import (
-    AdversarialLoss,
-    encoder_bce,
-    generator_bce,
-    residual_loss,
-)
+from anomaly_toolbox.losses.egbad import (AdversarialLoss, encoder_bce,
+                                          generator_bce, residual_loss)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -75,7 +70,8 @@ class EGBAD(Trainer):
         self.epoch_d_loss_avg = k.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = k.metrics.Mean(name="epoch_generator_loss")
         self.epoch_e_loss_avg = k.metrics.Mean(name="epoch_encoder_loss")
-        self._auprc = k.metrics.AUC(name="auprc", curve="PR", num_thresholds=500)
+        self._auc_rc = k.metrics.AUC(name="auc_rc", curve="PR", num_thresholds=500)
+        self._auc_roc = k.metrics.AUC(name="auc_roc", curve="ROC", num_thresholds=500)
 
         self.keras_metrics = {
             metric.name: metric
@@ -83,13 +79,15 @@ class EGBAD(Trainer):
                 self.epoch_d_loss_avg,
                 self.epoch_g_loss_avg,
                 self.epoch_e_loss_avg,
-                self._auprc,
+                self._auc_rc,
+                self._auc_roc,
             ]
         }
 
         self._alpha = tf.constant(0.9)
 
         self._minmax = AdversarialLoss(from_logits=True)
+        self._flatten = k.layers.Flatten()
 
     @staticmethod
     def hyperparameters() -> Set[str]:
@@ -101,7 +99,7 @@ class EGBAD(Trainer):
         epochs: int,
         step_log_frequency: int = 100,
     ):
-        best_auprc = -1
+        best_auc_rc, best_auc_roc = -1, -1
         for epoch in tf.range(epochs):
 
             for batch in self._dataset.train_normal:
@@ -157,14 +155,13 @@ class EGBAD(Trainer):
             tf.print(epoch, "Epoch completed")
 
             # Model selection at the end of every epoch on the validation set
-            # Calculate AUPRC - Area Under Precision Recall Curve
             # 1. Compute the the anomaly score
-            # 2. Use the AUC object to compute the AUPRC with different
+            # 2. Use the AUC object to compute the AUC with different
             # thresholds values on the anomaly score.
-            self._auprc.reset_state()
+            self._auc_rc.reset_state()
+            self._auc_roc.reset_state()
 
             for batch in self._dataset.validation:
-
                 x, labels_test = batch
 
                 # Get the anomaly scores
@@ -172,35 +169,57 @@ class EGBAD(Trainer):
                     x, self.encoder, self.generator, self.discriminator
                 )
 
-                # Update streaming auprc
-                self._auprc.update_state(labels_test, anomaly_scores[0])
+                # Update streaming auc_rc
+                self._auc_rc.update_state(labels_test, anomaly_scores)
+                # Update streaming auc_roc
+                self._auc_roc.update_state(labels_test, anomaly_scores)
 
-            # Save the model when AUPRC is the best
-            current_auprc = self._auprc.result()
-            if best_auprc < current_auprc:
-
-                tf.print("Best AUPRC on validation set: ", current_auprc)
+            # Save the best models (AUC RC)
+            current_auc_rc = self._auc_rc.result()
+            if best_auc_rc < current_auc_rc:
+                tf.print("Best AUPRC on validation set: ", current_auc_rc)
 
                 # Replace the best
-                best_auprc = current_auprc
+                best_auc_rc = current_auc_rc
 
-                base_path = self._log_dir / "results" / "best"
-
+                base_path = self._log_dir / "results" / "auc_rc"
                 self.generator.save(str(base_path / "generator"), overwrite=True)
-
                 self.encoder.save(str(base_path / "encoder"), overwrite=True)
-
                 self.discriminator.save(
                     str(base_path / "discriminator"), overwrite=True
                 )
 
-                with open(base_path / "auprc.json", "w") as fp:
+                with open(base_path / "validation.json", "w") as fp:
                     json.dump(
                         {
-                            "value": float(best_auprc),
+                            "value": float(best_auc_rc),
                         },
                         fp,
                     )
+
+            # Save the best models (AUC ROC)
+            current_auc_roc = self._auc_rc.result()
+            if best_auc_roc < current_auc_roc:
+                tf.print("Best AUC ROC on validation set: ", current_auc_roc)
+
+                # Replace the best
+                best_auc_rc = current_auc_roc
+
+                base_path = self._log_dir / "results" / "auc_roc"
+                self.generator.save(str(base_path / "generator"), overwrite=True)
+                self.encoder.save(str(base_path / "encoder"), overwrite=True)
+                self.discriminator.save(
+                    str(base_path / "discriminator"), overwrite=True
+                )
+
+                with open(base_path / "validation.json", "w") as fp:
+                    json.dump(
+                        {
+                            "value": float(best_auc_rc),
+                        },
+                        fp,
+                    )
+
             # Reset metrics or the data will keep accruing becoming an average of ALL the epochs
             self._reset_keras_metrics()
 
@@ -252,51 +271,57 @@ class EGBAD(Trainer):
         )
 
     def test(self):
+        """Measure the performance on the test set."""
 
-        base_path = self._log_dir / "results" / "best"
-        encoder_path = base_path / "encoder"
-        generator_path = base_path / "generator"
-        discriminator_path = base_path / "discriminator"
+        for metric in ["auc_rc", "auc_roc"]:
+            base_path = self._log_dir / "results" / metric
+            encoder_path = base_path / "encoder"
+            generator_path = base_path / "generator"
+            discriminator_path = base_path / "discriminator"
 
-        # Load the best models to use as the model here
-        encoder = tf.keras.models.load_model(encoder_path)
-        encoder.summary()
-        generator = tf.keras.models.load_model(generator_path)
-        generator.summary()
-        discriminator = tf.keras.models.load_model(discriminator_path)
-        discriminator.summary()
+            # Load the best models to use as the model here
+            encoder = tf.keras.models.load_model(encoder_path)
+            encoder.summary()
+            generator = tf.keras.models.load_model(generator_path)
+            generator.summary()
+            discriminator = tf.keras.models.load_model(discriminator_path)
+            discriminator.summary()
 
-        # Resetting the state of the AUPRC variable
-        self._auprc.reset_states()
+            # Resetting the state of the AUPRC variable
+            self._auc_rc.reset_states()
 
-        # Test on the test dataset
-        for batch in self._dataset.test:
+            # Test on the test dataset
+            for batch in self._dataset.test:
+                x, labels_test = batch
 
-            x, labels_test = batch
+                anomaly_scores = self._compute_anomaly_scores(
+                    x, encoder, generator, discriminator
+                )
 
-            anomaly_scores = self._compute_anomaly_scores(
-                x, encoder, generator, discriminator
-            )
+                self._auc_rc.update_state(labels_test, anomaly_scores)
+                self._auc_roc.update_state(labels_test, anomaly_scores)
 
-            # Update streaming auprc
-            self._auprc.update_state(labels_test, anomaly_scores[0])
+            auc_rc = self._auc_rc.result()
+            auc_roc = self._auc_roc.result()
 
-        # Get the current AUPRC value
-        auprc = self._auprc.result()
+            tf.print("Best AUPRC on test set: ", auc_rc)
+            tf.print("Best AUCROC on test set: ", auc_roc)
 
-        tf.print("Best AUPRC on test set: ", auprc)
+            base_path = self._log_dir / "results" / metric
 
-        best_path = self._log_dir / "results" / "best" / "AUPRC"
-        if not os.path.exists(best_path):
-            best_path.mkdir()
-        result_json_path = os.path.join(best_path, "result.json")
+            # Create the resulta
+            result = {
+                "auc_rc": {
+                    "value": float(auc_rc),
+                },
+                "auc_roc": {
+                    "value": float(auc_roc),
+                },
+            }
 
-        # Create the result
-        result = {"best_on_test_dataset": float(auprc)}
-
-        # Write the file
-        with open(result_json_path, "w") as fp:
-            json.dump(result, fp)
+            # Write the file
+            with open(base_path / "test.json", "w") as fp:
+                json.dump(result, fp)
 
     def _compute_anomaly_scores(
         self, x: tf.Tensor, encoder: k.Model, generator: k.Model, discriminator: k.Model
@@ -315,8 +340,8 @@ class EGBAD(Trainer):
         e_x = encoder.call(x, training=False)
         g_ex = generator.call(e_x, training=False)
 
-        d_x, x_features = discriminator([x, e_x], training=False)
-        d_gex, ex_features = discriminator([g_ex, e_x], training=False)
+        _, x_features = discriminator([x, e_x], training=False)
+        _, ex_features = discriminator([g_ex, e_x], training=False)
 
         g_score = tf.norm(
             k.layers.Flatten()(residual_loss(x, g_ex)), axis=1, keepdims=False
@@ -327,12 +352,12 @@ class EGBAD(Trainer):
         x_features = tf.squeeze(x_features)
 
         d_score = tf.norm(
-            k.layers.Flatten()(x_features - ex_features), axis=1, keepdims=False
+            self._flatten(x_features - ex_features), axis=1, keepdims=False
         )
 
         # Anomaly score should have a shape of (batch_size,)
-        anomaly_scores = tf.linalg.normalize(
+        normalized_anomaly_scores, _ = tf.linalg.normalize(
             self._alpha * d_score + (1.0 - self._alpha) * g_score
         )
 
-        return anomaly_scores
+        return normalized_anomaly_scores
