@@ -34,7 +34,7 @@ gast==0.4.0
     # via tensorflow
 google-auth-oauthlib==0.4.4
     # via tensorboard
-google-auth==1.33.1
+google-auth==1.34.0
     # via
     #   google-auth-oauthlib
     #   tensorboard
@@ -141,11 +141,11 @@ tensorboard==2.5.0
     # via
     #   -r requirements.in
     #   tensorflow
-tensorflow-datasets==4.3.0
+tensorflow-datasets==4.4.0
     # via -r requirements.in
 tensorflow-estimator==2.5.0
     # via tensorflow
-tensorflow-metadata==1.1.0
+tensorflow-metadata==1.2.0
     # via tensorflow-datasets
 tensorflow==2.5.0
     # via -r requirements.in
