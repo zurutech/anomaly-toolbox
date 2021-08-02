@@ -1,13 +1,12 @@
 """Training & evaluation script for anomaly toolbox."""
 
 import importlib
+import json
 import logging
+import os
 import sys
 from pathlib import Path
-import glob
-import os
 
-import json
 import click
 from tabulate import tabulate
 
@@ -51,7 +50,7 @@ from anomaly_toolbox.hps import grid_search
 )
 @click.option(
     "run_all",
-    "--run-all",
+    "--run-all/--no-run-all",
     help="Run all the available experiments",
     type=bool,
     default=False,
@@ -63,6 +62,7 @@ def main(
     dataset: str,
     run_all: bool,
 ) -> int:
+    """CLI toolbox entrypoint."""
 
     # Warning to the user if the hparams_tuning.json && --tuning==False
     if "tuning" in str(hps_path) and not hps_tuning:
@@ -140,45 +140,47 @@ def main(
             )
             return 1
 
+        results = log_dir / "results"
+        if results.exists():
+            print("Skipping: ", experiment, " result folder already present")
+            continue
+
         experiment_instance.run(hps_tuning, grid_search, dataset_instance)
 
     # Check the best result for all experiments
     if run_all:
-        result_dirs = ["Experiment", "AUC", "AUPRC", "Precision", "Recall"]
+        result_dirs = ["auc_rc", "auc_roc", "accuracy", "precision", "recall", "f1"]
 
         # For every experiment
         table = [result_dirs]  # This create the table header
         for experiment in experiments:
-            table_row = [[experiment, 0.0, 0.0, 0.0, 0.0]]
-            log_dir = Path("logs") / experiment / "results" / "best"
+            table_row = [[experiment] + [0.0] * len(result_dirs)]
+            log_dir = Path("logs") / experiment / "results"
             if os.path.exists(log_dir):
                 dirs = os.listdir(log_dir)
 
                 # For every possible metric collected
-                for dir in dirs:
-                    # Check if the dir considered is actually a metric dir
-                    if dir in result_dirs:
-                        # Get the index inside the list
-                        idx = result_dirs.index(dir)
-                        json_file = glob.glob(str(log_dir / dir / "result.json"))
+                for metric in [
+                    directory for directory in dirs if directory in result_dirs
+                ]:
+                    json_file = log_dir / metric / "test.json"
 
-                        # Get the value from the json file
-                        with open(json_file[0], "r") as file:
-                            data = json.load(file)
+                    # Get the value from the json file
+                    with open(json_file, "r") as file:
+                        data = json.load(file)
 
-                        current_result = data["best_on_test_dataset"]
-
+                    if metric in data:
                         # Put the result in the correct position of the list
-                        table_row[0][idx] = current_result
+                        # Get the index inside the list
+                        idx = result_dirs.index(metric) + 1
+                        table_row[0][idx] = data[metric]["value"]
 
                 # Put the results in the table
                 table = table + table_row
 
-        # TODO: to be deleted, just for output log
-        print(tabulate(table, headers="firstrow", tablefmt="github"))
-
+        md_table = tabulate(table, headers="firstrow", tablefmt="github")
         with open("result_table.md", "w") as outputfile:
-            outputfile.write(tabulate(table, headers="firstrow", tablefmt="github"))
+            outputfile.write(md_table)
 
     return 0
 
