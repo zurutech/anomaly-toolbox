@@ -313,10 +313,17 @@ class GANomaly(Trainer):
             e_loss,
         )
 
-    def test(self):
+    def test(self, base_path: Union[Path, None] = None):
+        """
+        Test the model on all the meaningful metrics.
+
+        Args:
+            base_path: the path to use for loading the models. If None, the default is used.
+        """
         # Loop over every "best model" for every metric used in model selection
         for metric in ["auc_rc", "auc_roc"]:
-            base_path = self._log_dir / "results" / metric
+            if not base_path:
+                base_path = self._log_dir / "results" / metric
             encoder_path = base_path / "encoder"
             generator_path = base_path / "generator"
 

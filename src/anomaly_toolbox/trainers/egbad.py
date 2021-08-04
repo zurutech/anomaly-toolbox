@@ -8,8 +8,12 @@ import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses.egbad import (AdversarialLoss, encoder_bce,
-                                          generator_bce, residual_loss)
+from anomaly_toolbox.losses.egbad import (
+    AdversarialLoss,
+    encoder_bce,
+    generator_bce,
+    residual_loss,
+)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -270,11 +274,16 @@ class EGBAD(Trainer):
             e_loss,
         )
 
-    def test(self):
-        """Measure the performance on the test set."""
+    def test(self, base_path: Union[Path, None] = None):
+        """Measure the performance on the test set.
+
+        Args:
+            base_path: the path to use for loading the models. If None, the default is used.
+        """
 
         for metric in ["auc_rc", "auc_roc"]:
-            base_path = self._log_dir / "results" / metric
+            if not base_path:
+                base_path = self._log_dir / "results" / metric
             encoder_path = base_path / "encoder"
             generator_path = base_path / "generator"
             discriminator_path = base_path / "discriminator"

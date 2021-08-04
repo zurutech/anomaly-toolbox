@@ -562,11 +562,16 @@ class DeScarGAN(Trainer):
 
         return d_loss, g_loss, x_hat
 
-    def test(self):
+    def test(self, base_path: Union[Path, None] = None):
         """Measure the performance (only measured metric is accuracy) on the
-        test set."""
+        test set.
 
-        base_path = self._log_dir / "results" / "accuracy"
+        Args:
+            base_path: the path to use for loading the models. If None, the default is used.
+        """
+
+        if not base_path:
+            base_path = self._log_dir / "results" / "accuracy"
 
         # Load the best model to use as the model here
         model_path = base_path / "generator"

@@ -345,17 +345,20 @@ class AnoGAN(Trainer):
             anomaly_score = opt_step()
         return anomaly_score
 
-    def test(self):
+    def test(self, base_path: Union[Path, None] = None):
         """
         Test the model on the test dataset.
         VERY slow because we search for the optimal z optimizing for every new image of
         the test set.
 
+        Args:
+            base_path: the path to use for loading the models. If None, the default is used.
+
         Returns:
             None.
         """
-
-        base_path = self._log_dir / "results" / "auc"
+        if not base_path:
+            base_path = self._log_dir / "results" / "auc"
         generator_path = base_path / "generator"
         discriminator_path = base_path / "discriminator"
 
