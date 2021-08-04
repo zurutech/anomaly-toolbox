@@ -283,3 +283,5 @@ fabric.properties
 .history
 
 # End of https://www.gitignore.io/api/flask,python,pycharm,visualstudiocode
+
+result_table.md

@@ -35,6 +35,10 @@ class DeScarGANExperiment(Experiment):
             log_dir: Where to store the tensorboard logs.
             dataset: The dataset to use for model training and evaluation.
         """
+
+        print("Running DeScarGAN experiment...")
+
+        # Create and configure the dataset
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
@@ -43,9 +47,17 @@ class DeScarGANExperiment(Experiment):
             shuffle_buffer_size=hps["shuffle_buffer_size"],
             cache=True,
         )
+
         summary_writer = tf.summary.create_file_writer(str(log_dir))
+
+        # Create the DeScarGAN model
         trainer = DeScarGAN(dataset, hps, summary_writer, log_dir)
+
+        # Train the model
         trainer.train(
             epochs=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
         )
+
+        # Test the model
+        trainer.test()

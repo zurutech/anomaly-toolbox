@@ -98,11 +98,11 @@ class AnoGAN(Trainer):
         self.epoch_d_loss_avg = k.metrics.Mean(name="epoch_discriminator_loss")
         self.epoch_g_loss_avg = k.metrics.Mean(name="epoch_generator_loss")
 
-        self._auc = k.metrics.AUC(num_thresholds=500)
+        self._auc_roc = k.metrics.AUC(num_thresholds=500)
 
         self.keras_metrics = {
             metric.name: metric
-            for metric in [self.epoch_d_loss_avg, self.epoch_g_loss_avg, self._auc]
+            for metric in [self.epoch_d_loss_avg, self.epoch_g_loss_avg, self._auc_roc]
         }
 
         # Variables and constants
@@ -129,8 +129,8 @@ class AnoGAN(Trainer):
         """Saves the models (generator and discriminator) and the
         AUC thresholds and value.
         """
-        current_auc = self._auc.result()
-        base_path = self._log_dir / "results" / "best"
+        current_auc = self._auc_roc.result()
+        base_path = self._log_dir / "results" / "auc"
         self.discriminator.save(
             str(base_path / "discriminator"),
             overwrite=True,
@@ -142,11 +142,11 @@ class AnoGAN(Trainer):
             include_optimizer=False,
         )
 
-        with open(base_path / "auc.json", "w") as fp:
+        with open(base_path / "validation.json", "w") as fp:
             json.dump(
                 {
                     "value": float(current_auc),
-                    "thresholds": self._auc.thresholds,
+                    "thresholds": self._auc_roc.thresholds,
                 },
                 fp,
             )
@@ -157,13 +157,14 @@ class AnoGAN(Trainer):
         epochs: tf.Tensor,
         step_log_frequency: tf.Tensor,
     ) -> None:
-        """Train the model for the desider number of epochs.
+        """
+        Train the model for the desired number of epochs.
         Calls the `train_step` function in loop.
         Also performs model selection on AUC using a subset of the test set.
 
         Args:
             epochs: The number of training epochs.
-            step_log_frequency: Number of steps to use for loging on CLI and
+            step_log_frequency: Number of steps to use for logging on CLI and
                                 tensorboard.
         """
         best_auc = -1.0
@@ -215,7 +216,7 @@ class AnoGAN(Trainer):
 
             # Model selection using a subset of the validation set (for speed reasons)
             # Keep "batches" number of batch of positives, them same for the negatives
-            # then unbatch them, and process every element indipendently.
+            # then un-batch them, and process every element independently.
             batches = 1
             validation_subset = self._dataset.validation_normal.take(
                 batches
@@ -228,8 +229,10 @@ class AnoGAN(Trainer):
                 x, y = sample
                 # self._z_gamma should be the z value that's likely
                 # to produce x (from what the generator knows)
-                anomaly_score = self.latent_search(x)
-                self._auc.update_state(
+                anomaly_score = self.latent_search(
+                    x, self.generator, self.discriminator
+                )
+                self._auc_roc.update_state(
                     y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
                 )
                 with self._summary_writer.as_default():
@@ -242,7 +245,7 @@ class AnoGAN(Trainer):
                         ),
                         step=step + idx,
                     )
-            current_auc = self._auc.result()
+            current_auc = self._auc_roc.result()
             with self._summary_writer.as_default():
                 tf.summary.scalar("auc", current_auc, step=step)
                 tf.print("Validation AUC: ", current_auc)
@@ -256,9 +259,12 @@ class AnoGAN(Trainer):
         self,
         x: tf.Tensor,
     ) -> Tuple[tf.Tensor, tf.Tensor, tf.Tensor]:
-        """Single training step.
+        """
+        Single training step.
+
         Args:
             x: A batch of images.
+
         Returns:
             x_hat: A batch of generated images.
             d_loss: The discriminator loss.
@@ -289,17 +295,24 @@ class AnoGAN(Trainer):
         return x_hat, d_loss, g_loss
 
     def latent_search(
-        self, x: tf.Tensor, gamma: tf.Tensor = tf.constant(500)
+        self,
+        x: tf.Tensor,
+        generator: k.Model,
+        discriminator: k.Model,
+        gamma: tf.Tensor = tf.constant(500),
     ) -> tf.Tensor:
-        """The test step searches in the latent space
-        the z value that's likely to be mapped with the input image x.
+        """
+        Search in the latent space the z value that's likely to be mapped with the input image x.
         This step returns the value of the latent vector.
         NOTE: this is slow, since it performs gamma optimization steps
         to find the value of z.
 
         Args:
             x: Test image.
+            generator: The generator model to be used.
+            discriminator: The discriminator model to be used.
             gamma: Number of optimization steps.
+
         Returns:
             anomaly_score at the end of the gamma steps.
         """
@@ -311,18 +324,18 @@ class AnoGAN(Trainer):
 
             with tf.GradientTape(watch_accessed_variables=False) as tape:
                 tape.watch(self._z_gamma)
-                x_hat = self.generator(tf.expand_dims(self._z_gamma, axis=0))
+                x_hat = generator(tf.expand_dims(self._z_gamma, axis=0))
                 residual_score = residual_loss(x, x_hat)
 
-                d_x, _ = self.discriminator(x, training=False)
-                d_x_hat, _ = self.discriminator(x_hat, training=False)
+                d_x, _ = discriminator(x, training=False)
+                d_x_hat, _ = discriminator(x_hat, training=False)
                 discrimination_score = self._minmax(d_x, d_x_hat)
 
                 anomaly_score = (
                     1.0 - self._lambda
                 ) * residual_score + self._lambda * discrimination_score
 
-            # we want to minimize the anomamly score
+            # we want to minimize the anomaly score
             grads = tape.gradient(anomaly_score, [self._z_gamma])
             self.optimizer_z.apply_gradients(zip(grads, [self._z_gamma]))
             return anomaly_score
@@ -331,3 +344,58 @@ class AnoGAN(Trainer):
         for _ in tf.range(gamma):
             anomaly_score = opt_step()
         return anomaly_score
+
+    def test(self, base_path: Union[Path, None] = None):
+        """
+        Test the model on the test dataset.
+        VERY slow because we search for the optimal z optimizing for every new image of
+        the test set.
+
+        Args:
+            base_path: the path to use for loading the models. If None, the default is used.
+
+        Returns:
+            None.
+        """
+        if not base_path:
+            base_path = self._log_dir / "results" / "auc"
+        generator_path = base_path / "generator"
+        discriminator_path = base_path / "discriminator"
+
+        # Load the best models to use as the model here
+        generator = tf.keras.models.load_model(generator_path)
+        generator.summary()
+        discriminator = tf.keras.models.load_model(discriminator_path)
+        discriminator.summary()
+
+        # Resetting the state of the AUC variable
+        self._auc_roc.reset_states()
+
+        # We need to search for z, hence we do this 1 element at a time (slow!)
+        test_subset = self._dataset.test.unbatch().batch(1)
+
+        for sample in test_subset:
+            x, y = sample
+            # self._z_gamma should be the z value that's likely
+            # to produce x (from what the generator knows)
+            anomaly_score = self.latent_search(x, generator, discriminator)
+            self._auc_roc.update_state(
+                y_true=y, y_pred=tf.expand_dims(anomaly_score, axis=0)
+            )
+
+        current_auc = self._auc_roc.result()
+
+        tf.print("Best AUC on test set: ", current_auc)
+        result_json_path = base_path / "test.json"
+
+        # Write the file
+        with open(result_json_path, "w") as fp:
+            json.dump(
+                {
+                    "auc_roc": {
+                        "value": float(current_auc),
+                        "thresholds": self._auc_roc.thresholds,
+                    }
+                },
+                fp,
+            )

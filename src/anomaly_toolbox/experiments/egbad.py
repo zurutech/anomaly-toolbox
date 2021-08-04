@@ -35,10 +35,12 @@ class EGBADExperiment(Experiment):
             log_dir: Where to store the tensorboard logs.
             dataset: The dataset to use for model training and evaluation.
         """
+        print("Running EGBAD experiment...")
+
         summary_writer = tf.summary.create_file_writer(str(log_dir))
         new_size = (28, 28)
 
-        # Create the dataset
+        # Create the dataset with the requested sizes (requested by the model architecture)
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
@@ -46,6 +48,7 @@ class EGBADExperiment(Experiment):
             shuffle_buffer_size=hps["shuffle_buffer_size"],
         )
 
+        # Create the EGBAD trainer
         trainer = EGBAD(
             dataset=dataset,
             hps=hps,
@@ -53,7 +56,12 @@ class EGBADExperiment(Experiment):
             log_dir=log_dir,
         )
 
+        # Train the EGBAD model
         trainer.train(
             epochs=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
         )
+
+        # Test on test dataset and put the results in the json file (the same file  used inside the
+        # training for the model selection)
+        trainer.test()

@@ -1,10 +1,8 @@
 tensorboard
-scipy
 numpy
-matplotlib
 click
 tensorflow
-scikit_learn
 tensorflow_datasets
 requests
 rarfile
+tabulate

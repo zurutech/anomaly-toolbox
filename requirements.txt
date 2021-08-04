@@ -18,12 +18,10 @@ cachetools==4.2.2
     # via google-auth
 certifi==2021.5.30
     # via requests
-charset-normalizer==2.0.3
+charset-normalizer==2.0.4
     # via requests
 click==8.0.1
     # via -r requirements.in
-cycler==0.10.0
-    # via matplotlib
 dill==0.3.4
     # via tensorflow-datasets
 flatbuffers==1.12
@@ -32,9 +30,9 @@ future==0.18.2
     # via tensorflow-datasets
 gast==0.4.0
     # via tensorflow
-google-auth-oauthlib==0.4.4
+google-auth-oauthlib==0.4.5
     # via tensorboard
-google-auth==1.33.0
+google-auth==1.34.0
     # via
     #   google-auth-oauthlib
     #   tensorboard
@@ -50,27 +48,18 @@ h5py==3.1.0
     # via tensorflow
 idna==3.2
     # via requests
-joblib==1.0.1
-    # via scikit-learn
 keras-nightly==2.5.0.dev2021032900
     # via tensorflow
 keras-preprocessing==1.1.2
     # via tensorflow
-kiwisolver==1.3.1
-    # via matplotlib
 markdown==3.3.4
     # via tensorboard
-matplotlib==3.4.2
-    # via -r requirements.in
 numpy==1.19.5
     # via
     #   -r requirements.in
     #   h5py
     #   keras-preprocessing
-    #   matplotlib
     #   opt-einsum
-    #   scikit-learn
-    #   scipy
     #   tensorboard
     #   tensorflow
     #   tensorflow-datasets
@@ -78,8 +67,6 @@ oauthlib==3.1.1
     # via requests-oauthlib
 opt-einsum==3.3.0
     # via tensorflow
-pillow==8.3.1
-    # via matplotlib
 promise==2.3
     # via tensorflow-datasets
 protobuf==3.17.3
@@ -95,10 +82,6 @@ pyasn1==0.4.8
     # via
     #   pyasn1-modules
     #   rsa
-pyparsing==2.4.7
-    # via matplotlib
-python-dateutil==2.8.2
-    # via matplotlib
 rarfile==4.0
     # via -r requirements.in
 requests-oauthlib==1.3.0
@@ -111,26 +94,20 @@ requests==2.26.0
     #   tensorflow-datasets
 rsa==4.7.2
     # via google-auth
-scikit-learn==0.24.2
-    # via -r requirements.in
-scipy==1.7.0
-    # via
-    #   -r requirements.in
-    #   scikit-learn
 six==1.15.0
     # via
     #   absl-py
     #   astunparse
-    #   cycler
     #   google-auth
     #   google-pasta
     #   grpcio
     #   keras-preprocessing
     #   promise
     #   protobuf
-    #   python-dateutil
     #   tensorflow
     #   tensorflow-datasets
+tabulate==0.8.9
+    # via -r requirements.in
 tensorboard-data-server==0.6.1
     # via tensorboard
 tensorboard-plugin-wit==1.8.0
@@ -139,11 +116,11 @@ tensorboard==2.5.0
     # via
     #   -r requirements.in
     #   tensorflow
-tensorflow-datasets==4.3.0
+tensorflow-datasets==4.4.0
     # via -r requirements.in
 tensorflow-estimator==2.5.0
     # via tensorflow
-tensorflow-metadata==1.1.0
+tensorflow-metadata==1.2.0
     # via tensorflow-datasets
 tensorflow==2.5.0
     # via -r requirements.in
@@ -151,9 +128,7 @@ termcolor==1.1.0
     # via
     #   tensorflow
     #   tensorflow-datasets
-threadpoolctl==2.2.0
-    # via scikit-learn
-tqdm==4.61.2
+tqdm==4.62.0
     # via tensorflow-datasets
 typing-extensions==3.7.4.3
     # via tensorflow

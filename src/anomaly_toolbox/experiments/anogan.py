@@ -42,8 +42,11 @@ class AnoGANExperiment(Experiment):
             log_dir: where to store the tensorboard logs.
             dataset: the dataset to use for model training and evaluation.
         """
+        print("Running AnoGAN experiment...")
+
         summary_writer = tf.summary.create_file_writer(str(log_dir))
 
+        # Create and configure the dataset
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
             batch_size=hps["batch_size"],
@@ -53,8 +56,14 @@ class AnoGANExperiment(Experiment):
             cache=True,
         )
 
+        # Create the AnoGAN model
         trainer = AnoGAN(dataset, hps, summary_writer, log_dir)
+
+        # Train the model
         trainer.train(
             epochs=hps["epochs"],
             step_log_frequency=hps["step_log_frequency"],
         )
+
+        # Test, using the best model so far
+        trainer.test()
