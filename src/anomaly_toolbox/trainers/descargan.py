@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, Union
 
 import tensorflow as tf
 import tensorflow.keras as k

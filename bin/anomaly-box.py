@@ -62,7 +62,7 @@ def main(
     dataset: str,
     run_all: bool,
 ) -> int:
-    """CLI toolbox entrypoint."""
+    """CLI anomaly-box."""
 
     # Warning to the user if the hparams_tuning.json && --tuning==False
     if "tuning" in str(hps_path) and not hps_tuning:
