@@ -1,9 +1,8 @@
 """Trainer for the GANomaly model."""
 
 import json
-import os
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, Union
 
 import tensorflow as tf
 import tensorflow.keras as k
