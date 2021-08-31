@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Training & evaluation script for anomaly toolbox."""
 
 import importlib
