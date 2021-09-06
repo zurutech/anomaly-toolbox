@@ -1,4 +1,4 @@
-# Addition of a (custom) datasets
+# Addition of a (custom) dataset
 
 To add a dataset you should follow some rules. These rules exist to ensure the compatibility 
 with the architecture of the toolbox as well as to ease the addition of your data.
