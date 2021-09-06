@@ -1,4 +1,4 @@
-"""Corrupoted MNIST dataset, splitted to be used for anomaly detection."""
+"""Corrupted MNIST dataset, split to be used for anomaly detection."""
 
 import tensorflow_datasets as tfds
 
@@ -9,7 +9,7 @@ class CorruptedMNIST(MNIST):
     """Corrupted MNIST dataset, splitted to be used for anomaly detection."""
 
     def __init__(self, corruption_type="shot_noise"):
-        """Corrupted MNIST dataset, splitted to be used for anomaly detection.
+        """Corrupted MNIST dataset, split to be used for anomaly detection.
         Args:
             corruption_type: one among the available corruptions as reported in
                              https://www.tensorflow.org/datasets/catalog/mnist_corrupted

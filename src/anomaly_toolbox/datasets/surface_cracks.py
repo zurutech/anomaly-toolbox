@@ -45,7 +45,7 @@ class SurfaceCracks(AnomalyDetectionDataset):
         self._download_and_extract()
 
         def _read_and_map_fn(label):
-            """Closure used in tf.data.Datset.map for creating
+            """Closure used in tf.data.Dataset.map for creating
             the correct pair (image, label).
             """
 
@@ -111,14 +111,14 @@ class SurfaceCracks(AnomalyDetectionDataset):
         self._path.mkdir()
 
         # Download a zip file
-        print("Dowloading dataset from: ", self._archive_url)
+        print("Downloading dataset from: ", self._archive_url)
         request = requests.get(self._archive_url)
         print("Unzipping...")
         with zipfile.ZipFile(BytesIO(request.content)) as zip_archive:
             # The zip file contains a rar file :\
             print(
                 "Unrarring... "
-                "(this may take up to 15 minutes because python rarfile is slow)"
+                "(this may take up to 15 minutes because python 'rarfile' is slow)"
             )
             rar_archive = zip_archive.read(
                 "Concrete Crack Images for Classification.rar"

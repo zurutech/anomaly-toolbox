@@ -1,4 +1,4 @@
-"""MNIST dataset, splitted to be used for anomaly detection."""
+"""MNIST dataset, split to be used for anomaly detection."""
 
 from functools import partial
 from typing import Optional, Tuple
