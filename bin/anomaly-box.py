@@ -94,11 +94,12 @@ def main(
                 importlib.import_module("anomaly_toolbox.datasets"),
                 dataset,
             )()
-        except (ModuleNotFoundError, AttributeError, TypeError):
+        except (ModuleNotFoundError, AttributeError, TypeError) as exc:
             logging.error(
-                "Dataset %s is not among the available: %s",
+                "Dataset %s is not among the available: %s.\n\nRaw error: %s",
                 dataset,
                 ",".join(available_datasets.__datasets__),
+                exc,
             )
             return 1
 
