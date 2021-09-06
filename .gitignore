@@ -285,3 +285,7 @@ fabric.properties
 # End of https://www.gitignore.io/api/flask,python,pycharm,visualstudiocode
 
 result_table.md
+
+# MVTec AD dataset files
+mvtec_ad/
+mvtec_anomaly_detection.tar.xz
