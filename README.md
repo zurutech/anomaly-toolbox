@@ -114,7 +114,7 @@ The provided datasets are:
 and are automatically downloaded when the user makes a specific choice: ["MNIST", 
 "CorruptedMNIST", "SurfaceCracks"].
 
-The user can also add its own specific dataset. To do this, the new dataset should inherit from the `AnomalyDetectionDataset` abstract class implementing its own `configure` method. For a more detailed guide, the user can refer to the `README.md` file inside the `src/anomaly_toolbox/datasets` folder. Moreover, at the same location, the user can find a `dummy.py` module with the basic skeleton code to implement a dataset.
+The user can also add its own specific dataset. To do this, the new dataset should inherit from the `AnomalyDetectionDataset` abstract class implementing its own `configure` method. For a more detailed guide, the user can refer to the `README.md` file inside the `src/anomaly_toolbox/datasets` folder. Moreover, in the `examples` folder, the user can find a `dummy.py` module with the basic skeleton code to implement a dataset.
 
 ## References
 
