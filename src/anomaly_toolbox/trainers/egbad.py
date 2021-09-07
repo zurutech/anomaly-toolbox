@@ -8,12 +8,8 @@ import tensorflow as tf
 import tensorflow.keras as k
 
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
-from anomaly_toolbox.losses.egbad import (
-    AdversarialLoss,
-    encoder_bce,
-    generator_bce,
-    residual_loss,
-)
+from anomaly_toolbox.losses.egbad import (AdversarialLoss, encoder_bce,
+                                          generator_bce, residual_loss)
 from anomaly_toolbox.models.egbad import Decoder, Discriminator, Encoder
 from anomaly_toolbox.trainers.trainer import Trainer
 
@@ -52,7 +48,7 @@ class EGBAD(Trainer):
         self.discriminator = Discriminator(n_channels, self._hps["latent_vector_size"])
 
         # Instantiate and define with correct input shape
-        fake_batch_size = (1, 28, 28, 1)
+        fake_batch_size = (1, 28, 28, n_channels)
         fake_latent_vector = (1, self._hps["latent_vector_size"])
         self.generator.call(tf.zeros(fake_latent_vector))
         self.encoder.call(tf.zeros(fake_batch_size))

@@ -47,7 +47,7 @@ class GANomaly(Trainer):
             l2_penalty=0.2,
         )
 
-        fake_batch_size = (1, 32, 32, 1)
+        fake_batch_size = (1, 32, 32, n_channels)
         self.discriminator(tf.zeros(fake_batch_size))
         self.discriminator.summary()
 
