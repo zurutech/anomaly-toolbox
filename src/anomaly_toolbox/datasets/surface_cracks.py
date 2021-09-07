@@ -149,11 +149,11 @@ class SurfaceCracks(AnomalyDetectionDataset):
             anomalous_label: If the raw dataset contains label, all the elements with
                              "anomalous_label" are converted to element of
                              self.anomalous_label class.
-            class_label: If the raw dataset contains labels, and we have positive and negative
-                          samples for this class, we can select only the elements with this class
-                          label. (e.g. dataset of industrial defects on different
-                          industrial objects and we are interested only in transistors and not
-                          on pills).
+            class_label: If the raw dataset contains different classes (each one
+                         containing both positive and negative samples) we can select
+                         only one class to focus on (e.g. a dataset of industrial
+                         defects on industrial objects composed of transistors and
+                         pills and we are interested only in transistors and not on pills).
             shuffle_buffer_size: Buffer size used during the tf.data.Dataset.shuffle call.
             cache: If True, cache the dataset
             drop_remainder: If True, when the dataset size is not a multiple of the dataset size,
