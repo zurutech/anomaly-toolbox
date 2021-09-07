@@ -134,11 +134,12 @@ def main(
                 importlib.import_module("anomaly_toolbox.experiments"),
                 experiment,
             )(hps_path, log_dir)
-        except (ModuleNotFoundError, AttributeError, TypeError):
+        except (ModuleNotFoundError, AttributeError, TypeError) as exc:
             logging.error(
-                "Experiment %s is not among the available: %s",
+                "Experiment %s is not among the available: %s.\n\nRaw error: %s",
                 experiment,
                 ",".join(available_experiments.__experiments__),
+                exc,
             )
             return 1
 
