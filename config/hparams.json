@@ -94,10 +94,10 @@
                 1
             ]
         },
-        "anomalous_label": {
+        "class_label": {
             "type": "Discrete",
             "values": [
-                2
+                "transistor"
             ]
         },
         "batch_size": {

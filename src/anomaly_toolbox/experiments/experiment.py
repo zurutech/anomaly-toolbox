@@ -42,6 +42,7 @@ class Experiment(abc.ABC):
         data-related hyperparameters."""
         return {
             "anomalous_label",
+            "class_label",
             "epochs",
             "batch_size",
             "shuffle_buffer_size",

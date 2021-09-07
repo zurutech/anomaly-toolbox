@@ -44,6 +44,7 @@ class GANomalyExperiment(Experiment):
         # Create the dataset with the requested sizes (requested by the model architecture)
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
+            class_label=hps["class_label"],
             batch_size=hps["batch_size"],
             new_size=new_size,
             shuffle_buffer_size=hps["shuffle_buffer_size"],

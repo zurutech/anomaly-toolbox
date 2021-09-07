@@ -49,6 +49,7 @@ class AnoGANExperiment(Experiment):
         # Create and configure the dataset
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
+            class_label=hps["class_label"],
             batch_size=hps["batch_size"],
             new_size=(28, 28),
             output_range=(-1.0, 1.0),  # generator has a tanh in output

@@ -23,7 +23,7 @@ def hparam_parser(
     Returns:
         A list of hyperparameters.
     """
-    with open(hparams_path) as fp:
+    with open(hparams_path, "r", encoding="utf-8") as fp:
         data = json.load(fp)
 
     # Get the experiment name
@@ -37,9 +37,11 @@ def hparam_parser(
         try:
             current_param = experiment_data[hparam_name]
         except KeyError:
+            if hparam_name in ("anomalous_label", "class_label"):
+                continue
             raise KeyError(
                 f"{hparam_name} key does not exist inside the {hparams_path} file"
-            )
+            ) from None
 
         # Get the 'hp' attribute taking the correct "type" from the JSON object (usually the
         # type is 'Discrete')
@@ -52,7 +54,18 @@ def hparam_parser(
                 hp_attr(current_param["values"]),
             )
         )
+    names = [param.name for param in hps]
+    anomalous_label_present = "anomalous_label" in names
+    class_label_present = "class_label" in names
 
+    if not class_label_present and not anomalous_label_present:
+        raise RuntimeError(
+            "One among anomalous_label and class_label is required in hps."
+        )
+    if not class_label_present and anomalous_label_present:
+        hps.append(hp.HParam("class_label", hp.Discrete([0])))
+    if class_label_present and not anomalous_label_present:
+        hps.append(hp.HParam("anomalous_label", hp.Discrete([0])))
     return hps
 
 
