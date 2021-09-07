@@ -1,7 +1,7 @@
 """Anomaly detection dataset interface."""
 
 import abc
-from typing import Optional, Tuple, Union
+from typing import Tuple, Union
 
 import tensorflow as tf
 

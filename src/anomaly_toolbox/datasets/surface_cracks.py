@@ -17,7 +17,7 @@ from functools import partial
 from glob import glob
 from io import BytesIO
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Tuple, Union
 
 import rarfile
 import requests

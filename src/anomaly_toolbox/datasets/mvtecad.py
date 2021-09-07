@@ -35,7 +35,7 @@ class MVTecAD(AnomalyDetectionDataset):
     defects and defect-free images.
 
     The validation set is a subset of the training set with 1725/2 images.
-    The test set is the remeaning part of the set (no overlap between
+    The test set is the remaining part of the set (no overlap between
     validation and test samples).
     """
 
@@ -110,7 +110,7 @@ class MVTecAD(AnomalyDetectionDataset):
 
         if not class_label or anomalous_label:
             raise RuntimeError(
-                "MVTec AD dataset reqires the class_label to be selected, only."
+                "MVTec AD dataset requires the class_label to be selected, only."
             )
 
         def _read_and_map_fn(label: tf.Tensor) -> Callable:
