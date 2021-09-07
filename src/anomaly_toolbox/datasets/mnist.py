@@ -1,7 +1,7 @@
 """MNIST dataset, split to be used for anomaly detection."""
 
 from functools import partial
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 import tensorflow as tf
 import tensorflow_datasets as tfds
@@ -31,7 +31,8 @@ class MNIST(AnomalyDetectionDataset):
         self,
         batch_size: int,
         new_size: Tuple[int, int],
-        anomalous_label: Optional[int] = None,
+        anomalous_label: Union[int, str, None] = None,
+        class_label: Union[int, str, None] = None,
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
         drop_remainder: bool = True,
@@ -44,6 +45,11 @@ class MNIST(AnomalyDetectionDataset):
             anomalous_label: If the raw dataset contains label, all the elements with
                              "anomalous_label" are converted to element of
                              self.anomalous_label class.
+            class_label: If the raw dataset contains labels, and we have positive and negative
+                          samples for this class, we can select only the elements with this class
+                          label. (e.g. dataset of industrial defects on different
+                          industrial objects and we are interested only in transistors and not
+                          on pills).
             shuffle_buffer_size: Buffer size used during the tf.data.Dataset.shuffle call.
             cache: If True, cache the dataset.
             drop_remainder: If True, when the dataset size is not a multiple of the dataset size,
