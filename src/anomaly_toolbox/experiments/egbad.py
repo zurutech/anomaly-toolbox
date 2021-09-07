@@ -43,6 +43,7 @@ class EGBADExperiment(Experiment):
         # Create the dataset with the requested sizes (requested by the model architecture)
         dataset.configure(
             anomalous_label=hps["anomalous_label"],
+            class_label=hps["class_label"],
             batch_size=hps["batch_size"],
             new_size=new_size,
             shuffle_buffer_size=hps["shuffle_buffer_size"],
@@ -62,6 +63,6 @@ class EGBADExperiment(Experiment):
             step_log_frequency=hps["step_log_frequency"],
         )
 
-        # Test on test dataset and put the results in the json file (the same file  used inside the
+        # Test on test dataset and put the results in the json file (the same file used inside the
         # training for the model selection)
         trainer.test()
