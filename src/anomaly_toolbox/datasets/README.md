@@ -12,8 +12,8 @@ In general, there are three basic simple possible cases of usage:
     b. Download the data directly from an online location (URL)
     c. Provide the dataset through the use of a local folder that contain all the data
 
-A part from these three cases, what you need to do when adding a dataset through the use of a .
-py file is to create a class that inherits from `datasets.dataset.AnomalyDetectionDataset`.
+A part from these three cases, what you need to do when adding a dataset through the use of a 
+'_. py_' file is to create a class that inherits from `datasets.dataset.AnomalyDetectionDataset`.
 
 ```python
 from anomaly_toolbox.datasets.dataset import AnomalyDetectionDataset
@@ -101,29 +101,35 @@ The properties are the following:
 The function to be used, i.e., the `configure` function has the following signature:
 
 ```python 
-def configure(
+    def configure(
         self,
         batch_size: int,
         new_size: Tuple[int, int],
-        anomalous_label: Optional[int] = None,
+        anomalous_label: Union[int, str, None] = None,
+        class_label: Union[int, str, None] = None,
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
         drop_remainder: bool = True,
         output_range: Tuple[float, float] = (-1.0, 1.0),
     ) -> None:
-    """Configure the dataset. This makes all the object properties valid (not None).
+        """Configure the dataset. This makes all the object properties valid (not None).
         Args:
-            batch_size: The dataset batch size
+            batch_size: The dataset batch size.
             new_size: (H,W) of the input image.
             anomalous_label: If the raw dataset contains label, all the elements with
                              "anomalous_label" are converted to element of
                              self.anomalous_label class.
+            class_label: If the raw dataset contains different classes (each one
+                         containing both positive and negative samples) we can select
+                         only one class to focus on (e.g. a dataset of industrial
+                         defects on industrial objects composed of transistors and
+                         pills and we are interested only in transistors and not on pills).
             shuffle_buffer_size: Buffer size used during the tf.data.Dataset.shuffle call.
-            cache: If True, cache the dataset
+            cache: If True, cache the dataset.
             drop_remainder: If True, when the dataset size is not a multiple of the dataset size,
                             the last batch will be dropped.
-            output_range: A Tuple (min, max) containing the output range to use for
-                          the processed images.
+            output_range: A Tuple (min, max) containing the output range to use
+                          for the processed images.
         """
 ```
 
@@ -388,21 +394,27 @@ The `configure` method has been next fulfilled as the following:
         self,
         batch_size: int,
         new_size: Tuple[int, int],
-        anomalous_label: Optional[int] = None,
+        anomalous_label: Union[int, str, None] = None,
+        class_label: Union[int, str, None] = None,
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
         drop_remainder: bool = True,
-        output_range: Tuple[float, float] = (0.0, 1.0),
+        output_range: Tuple[float, float] = (-1.0, 1.0),
     ) -> None:
         """Configure the dataset. This makes all the object properties valid (not None).
         Args:
-            batch_size: The dataset batch size
+            batch_size: The dataset batch size.
             new_size: (H,W) of the input image.
             anomalous_label: If the raw dataset contains label, all the elements with
                              "anomalous_label" are converted to element of
                              self.anomalous_label class.
+            class_label: If the raw dataset contains different classes (each one
+                         containing both positive and negative samples) we can select
+                         only one class to focus on (e.g. a dataset of industrial
+                         defects on industrial objects composed of transistors and
+                         pills and we are interested only in transistors and not on pills).
             shuffle_buffer_size: Buffer size used during the tf.data.Dataset.shuffle call.
-            cache: If True, cache the dataset
+            cache: If True, cache the dataset.
             drop_remainder: If True, when the dataset size is not a multiple of the dataset size,
                             the last batch will be dropped.
             output_range: A Tuple (min, max) containing the output range to use
