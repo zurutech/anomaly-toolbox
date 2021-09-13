@@ -1,33 +1,29 @@
-# Anomaly Toolbox![Python - Version](https://img.shields.io/pypi/pyversions/anomaly_toolbox.svg)
-![PyPy - Version](https://badge.fury.io/py/anomaly_toolbox.svg)
-![PyPI - License](https://img.shields.io/pypi/l/anomaly_toolbox.svg)
-![Anomaly Toolbox - Badge](https://img.shields.io/badge/package-anomaly-toolbox-brightgreen.svg)
-[![Build Status](https://img.shields.io/travis/zurutech/anomaly-toolbox.svg)](https://travis-ci.org/zurutech/anomaly-toolbox)
-[![Documentation Status](https://readthedocs.org/projects/anomaly-toolbox/badge/?version=latest)](https://anomaly-toolbox.readthedocs.io/en/latest/?badge=latest)
-[![codecov](https://codecov.io/gh/zurutech/anomaly-toolbox/branch/master/graph/badge.svg)](https://codecov.io/gh/zurutech/anomaly-toolbox)
-[![CodeFactor](https://www.codefactor.io/repository/github/zurutech/anomaly-toolbox/badge)](https://www.codefactor.io/repository/github/zurutech/anomaly-toolbox)![Contributions](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)
-[![Code Style - Zuru](https://img.shields.io/badge/codestyle-zuru-red)](https://github.com/zurutech/styleguide)
-[![Black - Badge](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/python/black)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v1.4%20adopted-ff69b4.svg)](CODE_OF_CONDUCT.md)
+# Anomaly Toolbox
 
 ## Description
 
-Anomaly Toolbox Powered by GANs. This is the accompanying toolbox for the paper "**A 
+_Anomaly Toolbox Powered by GANs._ 
+
+This is the accompanying toolbox for the paper "**A 
 Survey on GANs for Anomaly Detection**" (https://arxiv.org/pdf/1906.11632.pdf).
 
 The toolbox is meant to be used by the user to explore the performance of different GAN based 
-architectures (aka "**experiments**"). It also already provides some datasets to do experiments 
-on: 
-_MNIST_, 
-_Corrupted 
-MNIST_ and _Surface Cracks_ 
-(https://www.kaggle.com/arunrk7/surface-crack-detection). 
+architectures (in our work aka "**experiments**"). It also already provides some datasets to 
+perform experiments on: 
+* _MNIST_, 
+* _Corrupted MNIST_, 
+* _Surface Cracks_ (https://www.kaggle.com/arunrk7/surface-crack-detection),
+* _MVTec AD_ (https://www.mvtec.com/fileadmin/Redaktion/mvtec.
+  com/company/research/datasets/mvtec_ad.pdf).
 
-Apart from the _Corrupted Mnist_ and _Surface Cracks_, the _MNIST_ dataset was provided because the 
-original works extensively use it. All the architecture were tested on commonly used datasets such 
-as _MNIST_, _FashionMNIST_, _CIFAR-10_, and _KDD99_. Some of them were even tested on more 
-designated datasets, such as an X-Ray dataset that we cannot provide because of the impossibility 
-of getting the data. 
+We provided the _MNIST_ dataset because the original works extensively use it. On the other hand, 
+we have also added the previously listed datasets both because used by a particular 
+architecture and because they contribute a good benchmark for the models we have implemented.
+
+All the architectures were tested on commonly used datasets such as _MNIST_, _FashionMNIST_, 
+_CIFAR-10_, and _KDD99_. Some of them were even tested on more specific datasets, such as an 
+X-Ray dataset that, however, we could not provide because of the impossibility of getting the 
+data (privacy reasons). 
 
 The user can create their own dataset and use it to test the models.
 
@@ -39,22 +35,20 @@ The user can create their own dataset and use it to test the models.
 pip install anomaly-toolbox
 ```
 
-Then you can choose what to run, for example:
+Then you can choose what experiment to run. For example:
 
-* Run all the experiments using the pre-defined hyperparameters file _hparams.json_ and the _MNIST_ 
-dataset:
-
-```bash
-anomaly-box.py --run-all True --hps-path path/to/config/hparams.json --dataset MNIST 
-```
-
-* Run a specified experiment, for example the GANomaly architecture, with hyperparameters tuning 
-enabled, the pre-defined hyperparameters file _hparams.json_ and the _MNIST_ 
-dataset:
+* Run the GANomaly experiment (i.e., the GANomaly architecture) with hyperparameters tuning 
+  enabled, the pre-defined hyperparameters file _hparams.json_ and the _MNIST_ dataset:
 
 ```bash
 anomaly-box.py --experiment GANomalyExperiment --hps-path path/to/config/hparams.json --dataset 
 MNIST 
+```
+* Otherwise, you can run all the experiments using the pre-defined hyperparameters file _hparams.
+  json_ and the _MNIST_ dataset:
+
+```bash
+anomaly-box.py --run-all True --hps-path path/to/config/hparams.json --dataset MNIST 
 ```
 
 For any other information, feel free to check the help:
@@ -65,8 +59,8 @@ anomaly-box.py --help
 
 ## Contribution
 
-This work is completely open source, and we would appreciate any contribution to the code. Any merge 
-request to enhance, correct or expand the work is welcome.
+This work is completely open source, and **we would appreciate any contribution to the code**. 
+Any merge request to enhance, correct or expand the work is welcome.
 
 ## Notes
 
@@ -110,11 +104,16 @@ The provided datasets are:
 * MNIST 
 * Corrupted Mnist
 * Surface Crack (https://www.kaggle.com/arunrk7/surface-crack-detection)
+*  MVTec AD (https://www.mvtec.com/fileadmin/Redaktion/mvtec.com/company/research/datasets/mvtec_ad.pdf)
 
 and are automatically downloaded when the user makes a specific choice: ["MNIST", 
-"CorruptedMNIST", "SurfaceCracks"].
+"CorruptedMNIST", "SurfaceCracks","MVTecAD"].
 
-The user can also add its own specific dataset. To do this, the new dataset should inherit from the `AnomalyDetectionDataset` abstract class implementing its own `configure` method. For a more detailed guide, the user can refer to the `README.md` file inside the `src/anomaly_toolbox/datasets` folder. Moreover, in the `examples` folder, the user can find a `dummy.py` module with the basic skeleton code to implement a dataset.
+The user can also add its own specific dataset. To do this, the new dataset should inherit from 
+the `AnomalyDetectionDataset` abstract class implementing its own `configure` method. For a more 
+detailed guide, the user can refer to the `README.md` file inside the 
+`src/anomaly_toolbox/datasets` folder. Moreover, in the `examples` folder, the user can find a 
+`dummy.py` module with the basic skeleton code to implement a dataset.
 
 ## References
 

@@ -2,7 +2,7 @@
 
 from functools import partial
 from glob import glob
-from typing import Optional, Tuple
+from typing import Tuple, Union
 from pathlib import Path
 
 import tensorflow as tf
@@ -111,7 +111,8 @@ class Dummy(AnomalyDetectionDataset):
         self,
         batch_size: int,
         new_size: Tuple[int, int],
-        anomalous_label: Optional[int] = None,
+        anomalous_label: Union[int, str, None] = None,
+        class_label: Union[int, str, None] = None,
         shuffle_buffer_size: int = 10000,
         cache: bool = True,
         drop_remainder: bool = True,
@@ -119,17 +120,22 @@ class Dummy(AnomalyDetectionDataset):
     ) -> None:
         """Configure the dataset. This makes all the object properties valid (not None).
         Args:
-            batch_size: The dataset batch size.
+            batch_size: The dataset batch size
             new_size: (H,W) of the input image.
-            anomalous_label: If the raw dataset contains label, all the elements with
+            anomalous_label: If the raw dataset contains labels, all the elements with
                              "anomalous_label" are converted to element of
                              self.anomalous_label class.
+            class_label: If the raw dataset contains different classes (each one
+                         containing both positive and negative samples) we can select
+                         only one class to focus on (e.g. a dataset of industrial
+                         defects on industrial objects composed of transistors and
+                         pills and we are interested only in transistors and not on pills).
             shuffle_buffer_size: Buffer size used during the tf.data.Dataset.shuffle call.
-            cache: If True, cache the dataset.
+            cache: If True, cache the dataset
             drop_remainder: If True, when the dataset size is not a multiple of the dataset size,
                             the last batch will be dropped.
-            output_range: A Tuple (min, max) containing the output range to use
-                          for the processed images.
+            output_range: A Tuple (min, max) containing the output range to use for
+                          the processed images.
         """
 
         # This part should exists in both "a" and "b" cases.
