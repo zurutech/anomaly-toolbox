@@ -42,7 +42,7 @@ google-pasta==0.2.0
     # via tensorflow
 googleapis-common-protos==1.53.0
     # via tensorflow-metadata
-grpcio==1.39.0
+grpcio==1.40.0
     # via
     #   tensorboard
     #   tensorflow
