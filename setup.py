@@ -50,7 +50,7 @@ def main():
         package_dir={"": "src"},
         packages=find_packages(where="src"),
         url="https://github.com/zurutech/anomaly-toolbox",
-        version="0.1.0",
+        version="0.1.2",
         zip_safe=False,
     )
 
