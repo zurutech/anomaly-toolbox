@@ -48,7 +48,7 @@ MNIST
   json_ and the _MNIST_ dataset:
 
 ```bash
-anomaly-box.py --run-all True --hps-path path/to/config/hparams.json --dataset MNIST 
+anomaly-box.py --run-all --hps-path path/to/config/hparams.json --dataset MNIST 
 ```
 
 For any other information, feel free to check the help:
