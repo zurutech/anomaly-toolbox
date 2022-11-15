@@ -28,6 +28,7 @@ More information can be found in our corresponding paper
 (https://www.mvtec.com/fileadmin/Redaktion/mvtec.com/company/research/datasets/mvtec_ad.pdf)
 """
 
+import os
 import ftplib
 import tarfile
 from functools import partial
@@ -87,10 +88,11 @@ class MVTecAD(AnomalyDetectionDataset):
             ftp.retrbinary("RETR " + self._archive_filename, fp.write)
         ftp.quit()
         print("Unxz and untar (it may take a long time)...")
+        
+        # CVE-2007-4559 vuilnerability patch applied ("path traversal attack", 
+        # https://www.trellix.com/en-us/about/newsroom/stories/research/tarfile-exploiting-the-world.html)
         with tarfile.open(self._archive_filename, mode="r:xz") as tar_archive:
-            
-            import os
-            
+                        
             def is_within_directory(directory, target):
                 
                 abs_directory = os.path.abspath(directory)
