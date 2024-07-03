@@ -284,7 +284,7 @@ class GANomaly(Trainer):
 
             # Generator Loss
             # adversarial_loss = losses.adversarial_loss_fm(d_f_x, d_f_x_hat)
-            bce_g_loss = generator_bce(g_ex, from_logits=True)
+            bce_g_loss = generator_bce(d_gex, from_logits=True)
 
             l1_loss = self._mae(x, g_ex)  # Contextual loss
             e_loss = self._mse(e_x, e_gex)  # Encoder loss
